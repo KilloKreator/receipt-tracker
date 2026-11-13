@@ -94,3 +94,22 @@ details.card.conn summary::-webkit-details-marker{display:none}
 details.card.conn summary::after{content:'›';font-size:26px;color:var(--muted);transform:rotate(90deg);transition:transform .2s}
 details.card.conn[open] summary::after{transform:rotate(-90deg)}
 details.card.conn[open] summary{margin-bottom:6px}
+.searchbar{padding:6px 12px 2px}
+.searchbar input{display:block;width:100%;margin:0;font:inherit;font-size:17px;color:var(--text);border:1px solid var(--line);border-radius:12px;padding:10px 12px;background:var(--card);-webkit-appearance:none;appearance:none}
+details.folder{margin:8px 0}
+details.folder>summary{list-style:none;cursor:pointer;display:flex;align-items:center;gap:10px;padding:12px 12px;background:var(--card);border-radius:14px}
+details.folder>summary::-webkit-details-marker{display:none}
+details.folder>summary::before{content:'›';font-size:24px;line-height:1;color:var(--muted);transition:transform .15s;width:12px}
+details.folder[open]>summary::before{transform:rotate(90deg)}
+details.folder .ft{flex:1;min-width:0}
+details.folder .ft b{display:block}
+details.folder .fs{font-size:13px;color:var(--muted)}
+details.folder .famt{font-weight:700;font-variant-numeric:tabular-nums}
+details.month>summary{font-size:17px}
+details.month>summary .ficon{font-size:22px}
+details.week{margin:6px 0 6px 14px}
+details.week>summary{background:transparent;border:1px solid var(--line);padding:9px 12px}
+details.week .item{margin-left:0}
+.monthtools{margin:6px 0 2px 14px}
+.monthtools button{background:none;color:var(--accent);padding:6px 4px;font-size:15px}
+.results{font-size:14px;color:var(--muted);margin:10px 6px 0}

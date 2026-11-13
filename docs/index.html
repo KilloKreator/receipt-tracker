@@ -27,6 +27,7 @@
       <button class="icon" id="btnSettings" aria-label="Settings">⚙︎</button>
     </header>
     <div id="syncBar" class="syncbar"></div>
+    <div class="searchbar"><input type="search" id="search" placeholder="🔍 Search customer, payee or date" autocomplete="off" autocorrect="off" spellcheck="false"></div>
     <div class="list" id="list"></div>
     <div class="empty hidden" id="emptyList">
       <div class="big">🧾</div>
@@ -67,6 +68,7 @@
     </header>
     <div class="scroll">
       <div class="preview"><img id="editImg" alt="Receipt"></div>
+      <button class="secondary wide" id="editShare">📤 Save image to Photos or Files</button>
       <div id="ocrStatus" class="ocr hidden"></div>
       <div class="form">
         <label>Date<input type="date" id="fDate"></label>

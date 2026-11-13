@@ -1,6 +1,6 @@
 /* KellerKraft Receipts — phone app */
 'use strict';
-const VERSION = '0.1.1';
+const VERSION = '0.1.2';
 const DEFAULT_CATEGORY = 'Uncategorized Expenses';
 const $ = id => document.getElementById(id);
 const norm = s => String(s == null ? '' : s).replace(/\s+/g, ' ').trim();
@@ -29,39 +29,137 @@ const saveSettings = () => DB.kvSet('settings', settings);
 const saveLists = () => DB.kvSet('lists', lists);
 const sortNames = a => [...new Set(a.map(norm).filter(Boolean))].sort((x, y) => x.localeCompare(y, undefined, { sensitivity: 'base' }));
 
-/* ---------- home ---------- */
+/* ---------- home: month folders → week folders, with search ---------- */
+let allRecs = [];
+const openFolders = new Set();
+let foldersInit = false;
+const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+const MON3 = MONTHS.map(m => m.slice(0, 3));
+const pad2 = n => String(n).padStart(2, '0');
+const dOf = iso => new Date((iso || todayISO()) + 'T12:00');
+const isoOf = d => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+function weekStart(iso) { const d = dOf(iso); d.setDate(d.getDate() - d.getDay()); return d; }   // Sunday
+function searchText(r) {
+  const d = dOf(r.date), m = d.getMonth() + 1, day = d.getDate(), y = d.getFullYear();
+  return lc([r.payee, r.memo, r.customer, r.category, r.note, r.total != null ? Number(r.total).toFixed(2) : '',
+    r.date, `${m}/${day}/${y}`, `${m}/${day}/${String(y).slice(2)}`, `${pad2(m)}/${pad2(day)}/${y}`, `${m}/${day}`, `${pad2(m)}/${pad2(day)}`,
+    `${MONTHS[m - 1]} ${day} ${y}`, `${MON3[m - 1]} ${day} ${y}`, `${MONTHS[m - 1]} ${y}`].join(' | '));
+}
+function sumOf(rs) { return rs.reduce((s, r) => s + (Number(r.total) || 0), 0); }
+function itemEl(r) {
+  const it = document.createElement('div'); it.className = 'item';
+  const img = document.createElement('img'); img.src = r.thumb || ''; img.alt = '';
+  const mid = document.createElement('div'); mid.className = 'mid';
+  const t1 = document.createElement('div'); t1.className = 't1'; t1.textContent = r.payee || r.memo || '(no payee)';
+  const t2 = document.createElement('div'); t2.className = 't2';
+  t2.textContent = [dOf(r.date).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }), r.customer || 'No customer'].join(' · ');
+  const chip = document.createElement('span'); chip.className = 'chip ' + (r.synced ? 'ok' : 'wait'); chip.textContent = r.synced ? 'On computer ✓' : 'Waiting to sync';
+  mid.append(t1, t2, chip);
+  const amt = document.createElement('div'); amt.className = 'amt'; amt.textContent = money(r.total);
+  it.append(img, mid, amt);
+  it.onclick = () => openEdit(r, false);
+  return it;
+}
+function folderEl(key, cls, icon, title, rs) {
+  const d = document.createElement('details'); d.className = 'folder ' + cls; d.open = openFolders.has(key);
+  d.addEventListener('toggle', () => { if (d.open) openFolders.add(key); else openFolders.delete(key); });
+  const sm = document.createElement('summary');
+  const waiting = rs.filter(r => !r.synced).length;
+  const ft = document.createElement('div'); ft.className = 'ft';
+  const b = document.createElement('b'); b.textContent = (icon ? icon + ' ' : '') + title;
+  const fs = document.createElement('span'); fs.className = 'fs'; fs.textContent = `${rs.length} receipt${rs.length === 1 ? '' : 's'}`;
+  ft.append(b, fs);
+  if (waiting) { const c = document.createElement('span'); c.className = 'chip wait'; c.style.marginLeft = '6px'; c.textContent = `${waiting} waiting`; fs.after(c); }
+  const amt = document.createElement('div'); amt.className = 'famt'; amt.textContent = money(sumOf(rs));
+  sm.append(ft, amt); d.append(sm);
+  return d;
+}
 async function renderHome() {
-  const all = (await DB.all()).sort((a, b) => (b.date || '').localeCompare(a.date || '') || b.created - a.created);
+  allRecs = (await DB.all()).sort((a, b) => (b.date || '').localeCompare(a.date || '') || b.created - a.created);
   const list = $('list'); list.innerHTML = '';
-  $('emptyList').classList.toggle('hidden', all.length > 0);
-  let lastDay = null;
-  for (const r of all) {
-    if (r.date !== lastDay) {
-      lastDay = r.date;
-      const d = document.createElement('div'); d.className = 'daygroup';
-      d.textContent = r.date ? new Date(r.date + 'T12:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' }) : 'No date';
-      list.append(d);
+  $('emptyList').classList.toggle('hidden', allRecs.length > 0);
+  const q = lc($('search').value);
+  if (q) {
+    const words = q.split(' ').filter(Boolean);
+    const hits = allRecs.filter(r => { const t = searchText(r); return words.every(w => t.includes(w)); });
+    const h = document.createElement('div'); h.className = 'results';
+    h.textContent = hits.length ? `${hits.length} found · ${money(sumOf(hits))}` : 'Nothing found.';
+    list.append(h);
+    hits.forEach(r => list.append(itemEl(r)));
+  } else {
+    // group by month, then by week (Sunday–Saturday)
+    const months = new Map();
+    for (const r of allRecs) {
+      const mk = (r.date || todayISO()).slice(0, 7);
+      if (!months.has(mk)) months.set(mk, []);
+      months.get(mk).push(r);
     }
-    const it = document.createElement('div'); it.className = 'item';
-    const img = document.createElement('img'); img.src = r.thumb || ''; img.alt = '';
-    const mid = document.createElement('div'); mid.className = 'mid';
-    const t1 = document.createElement('div'); t1.className = 't1'; t1.textContent = r.payee || r.memo || '(no payee)';
-    const t2 = document.createElement('div'); t2.className = 't2'; t2.textContent = [r.customer || 'No customer', r.category].filter(Boolean).join(' · ');
-    const chip = document.createElement('span'); chip.className = 'chip ' + (r.synced ? 'ok' : 'wait'); chip.textContent = r.synced ? 'On computer ✓' : 'Waiting to sync';
-    mid.append(t1, t2, chip);
-    const amt = document.createElement('div'); amt.className = 'amt'; amt.textContent = money(r.total);
-    it.append(img, mid, amt);
-    it.onclick = () => openEdit(r, false);
-    list.append(it);
+    if (!foldersInit && allRecs.length) {
+      foldersInit = true;
+      const first = [...months.keys()][0];
+      openFolders.add('m' + first);
+      const wk = isoOf(weekStart(months.get(first)[0].date));
+      openFolders.add('w' + first + wk);
+    }
+    for (const [mk, rs] of months) {
+      const [y, m] = mk.split('-').map(Number);
+      const md = folderEl('m' + mk, 'month', '📁', `${MONTHS[m - 1]} ${y}`, rs);
+      const tools = document.createElement('div'); tools.className = 'monthtools';
+      const sb = document.createElement('button'); sb.textContent = `📤 Save all ${rs.length} image${rs.length === 1 ? '' : 's'} from ${MONTHS[m - 1]}`;
+      sb.onclick = () => shareImages(rs, `${MONTHS[m - 1]} ${y} receipts`);
+      tools.append(sb); md.append(tools);
+      const weeks = new Map();
+      for (const r of rs) { const wk = isoOf(weekStart(r.date)); if (!weeks.has(wk)) weeks.set(wk, []); weeks.get(wk).push(r); }
+      for (const [wk, wrs] of weeks) {
+        const s0 = dOf(wk), e0 = dOf(wk); e0.setDate(e0.getDate() + 6);
+        // only show the days inside this month
+        const s1 = s0.getMonth() + 1 === m ? s0 : new Date(y, m - 1, 1, 12);
+        const e1 = e0.getMonth() + 1 === m ? e0 : new Date(y, m, 0, 12);
+        const label = `${MON3[m - 1]} ${s1.getDate()}${e1.getDate() !== s1.getDate() ? ' – ' + e1.getDate() : ''}`;
+        const wd = folderEl('w' + mk + wk, 'week', '', label, wrs);
+        wrs.forEach(r => wd.append(itemEl(r)));
+        md.append(wd);
+      }
+      list.append(md);
+    }
   }
-  const waiting = all.filter(r => !r.synced).length;
+  const waiting = allRecs.filter(r => !r.synced).length;
   const bar = $('syncBar');
   bar.className = 'syncbar';
   if (!settings.token) { bar.textContent = 'Not connected to your computer yet. Tap ⚙︎ to set it up.'; bar.classList.add('warn'); }
   else if (syncing) bar.textContent = 'Syncing…';
   else if (waiting) { bar.textContent = `${waiting} receipt${waiting > 1 ? 's' : ''} waiting to sync. Sync when you're on home Wi-Fi.`; bar.classList.add('warn'); }
-  else if (all.length) { bar.textContent = 'All receipts are on your computer ✓'; bar.classList.add('good'); }
+  else if (allRecs.length) { bar.textContent = 'All receipts are on your computer ✓'; bar.classList.add('good'); }
   else bar.textContent = '';
+}
+let searchT;
+$('search').addEventListener('input', () => { clearTimeout(searchT); searchT = setTimeout(renderHome, 150); });
+
+/* ---------- saving images to Photos / Files (iPhone share menu) ---------- */
+function imageName(r) {
+  const safe = s => String(s || '').replace(/[\\/:*?"<>|]+/g, ' ').replace(/\s+/g, ' ').trim();
+  return [r.date || todayISO(), safe(r.payee || r.memo) || 'receipt', r.total != null ? Number(r.total).toFixed(2) : '', safe(r.customer)]
+    .filter(Boolean).join(' ').slice(0, 120) + '.jpg';
+}
+async function shareImages(recs, title) {
+  const used = new Set();
+  const files = recs.filter(r => r.image).map(r => {
+    let n = imageName(r), k = 2;
+    while (used.has(n)) n = n.replace(/( \(\d+\))?\.jpg$/, ` (${k++}).jpg`);
+    used.add(n);
+    return new File([r.image], n, { type: 'image/jpeg' });
+  });
+  if (!files.length) { toast('No images to save.'); return; }
+  if (navigator.canShare && navigator.canShare({ files })) {
+    try { await navigator.share({ files, title }); }
+    catch (e) { if (e.name !== 'AbortError') alert("Couldn't open the share menu: " + e.message); }
+    return;
+  }
+  // fallback (computers / older phones): download the files
+  for (const f of files) {
+    const a = document.createElement('a'); a.href = URL.createObjectURL(f); a.download = f.name;
+    document.body.append(a); a.click(); a.remove();
+  }
 }
 
 /* ---------- scanning ---------- */
@@ -219,6 +317,7 @@ function selectAdd(sel, key, label) {
 }
 selectAdd($('fCustomer'), 'customer', 'customer');
 selectAdd($('fCategory'), 'category', 'category');
+$('editShare').onclick = () => shareImages([Object.assign({}, current, { date: $('fDate').value || current.date, payee: canonPayee($('fPayee').value) || current.payee, customer: $('fCustomer').value === '__new__' ? '' : $('fCustomer').value, total: parseFloat($('fTotal').value) || current.total })], 'Receipt');
 $('editImg').onclick = () => { $('viewerImg').src = $('editImg').src; $('viewer').classList.remove('hidden'); };
 $('viewerClose').onclick = () => $('viewer').classList.add('hidden');
 

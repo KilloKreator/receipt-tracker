@@ -1,5 +1,5 @@
 /* KK Receipts — keeps the whole app on the phone so it works with no signal */
-const CACHE = 'kk-receipts-v0.1.1';
+const CACHE = 'kk-receipts-v0.1.2';
 const FILES = [
   './', 'index.html', 'app.css', 'app.js', 'db.js', 'scan.js', 'parse.js', 'manifest.webmanifest',
   'icons/apple-touch-icon.png', 'icons/icon-192.png', 'icons/icon-512.png',
