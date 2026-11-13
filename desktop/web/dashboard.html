@@ -126,13 +126,13 @@ tr.picked td{background:var(--soft)}
   <div class="tools">
     <div class="row">
       <button id="bLists">📋 Lists</button>
-      <button id="bSettings">⚙ Settings</button>
       <div class="menuwrap">
         <button id="bMenu" class="menubtn" aria-label="Menu" aria-haspopup="true" aria-expanded="false" title="Menu">☰</button>
         <div class="menu hidden" id="menu" role="menu">
           <button role="menuitem" id="bSetup">📱 Phone setup</button>
           <button role="menuitem" id="mLoad">⬆ Load converter settings…</button>
           <button role="menuitem" id="mHelp">📘 Converter tutorial</button>
+          <button role="menuitem" id="bSettings">⚙ Settings</button>
         </div>
       </div>
       <input type="file" id="loadFile" accept=".json,application/json" class="hidden">
@@ -181,7 +181,7 @@ tr.picked td{background:var(--soft)}
   </div>
   <div id="saveMsg"></div>
   <div class="table-wrap" style="margin-top:10px"><table>
-    <thead><tr><th style="width:40px"><input type="checkbox" id="cHead" aria-label="Select all"></th><th></th><th>Date</th><th>Payee</th><th>Category</th><th class="amt">Total</th><th>Note</th></tr></thead>
+    <thead><tr><th style="width:40px"><input type="checkbox" id="cHead" aria-label="Select all"></th><th></th><th>Date</th><th>Payee</th><th id="colMid">Category</th><th>Note</th><th class="amt">Total</th></tr></thead>
     <tbody id="rBody"></tbody></table></div>
 </section>
 <p class="muted" style="text-align:center" id="foot"></p>
@@ -404,6 +404,7 @@ function renderCustomer() {
   if (curCust !== '(all)' && !all.length) { $('bBack').click(); return; }   // folder is empty now (e.g. everything was moved)
   $('custTitle').textContent = (curCust === '(all)' ? '🗂 All receipts' : curCust === '(none)' ? '📂 No customer yet' : '📁 ' + curCust);
   $('custTotal').textContent = money(sumOf(all));
+  $('colMid').textContent = curCust === '(all)' ? 'Customer' : 'Category';
   const ids = new Set(S.receipts.map(r => r.id));
   [...selected].forEach(id => { if (!ids.has(id)) selected.delete(id); });
   const rs = filtered(), tb = $('rBody'); tb.innerHTML = '';
@@ -415,11 +416,11 @@ function renderCustomer() {
       el('td', { class: 'chk' }, cb),
       el('td', { class: 'thumb' }, r.hasImage ? el('img', { src: `/img/${r.id}.jpg?v=${r.received}`, alt: '', loading: 'lazy' }) : ''),
       el('td', { text: fmtDate(r.date), style: 'white-space:nowrap' }),
-      el('td', null, r.payee || r.memo || '', curCust === '(all)' && r.customer ? el('div', { class: 'muted', text: r.customer }) : null,
+      el('td', null, r.payee || r.memo || '',
         r.original === 'pdf' ? el('span', { class: 'tag pc', text: 'PDF', title: 'Added on this computer from a PDF' }) : null,
         r.pdfAt ? el('div', null, el('span', { class: 'tag pdf', text: '📄 In PDF ' + new Date(r.pdfAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }), title: `Put in a PDF on ${new Date(r.pdfAt).toLocaleString()}${r.pdfName ? ': ' + r.pdfName : ''}` })) : null),
-      el('td', { text: r.category || '' }),
-      el('td', { class: 'amt', text: money(r.total) }), el('td', { class: 'muted', text: r.note || '' }));
+      curCust === '(all)' ? el('td', null, r.customer || el('span', { class: 'tag none', text: 'No customer' })) : el('td', { text: r.category || '' }),
+      el('td', { class: 'muted', text: r.note || '' }), el('td', { class: 'amt', text: money(r.total) }));
     cb.addEventListener('click', e => e.stopPropagation());
     cb.addEventListener('change', () => { if (cb.checked) selected.add(r.id); else selected.delete(r.id); tr.classList.toggle('picked', cb.checked); selSum(); });
     tr.querySelector('td.chk').addEventListener('click', e => { if (e.target === cb) return; e.stopPropagation(); cb.click(); });

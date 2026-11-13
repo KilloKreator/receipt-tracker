@@ -76,10 +76,10 @@ td.amt{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
 td.in{color:var(--good)}
 tr.off td{background:var(--row-off);color:var(--muted)}
 tr.off td input[type=text]{opacity:.6}
-td.desc{min-width:150px;max-width:220px;word-break:break-word}
-td.cat input{width:100%;min-width:165px}
-td.vend input{width:100%;min-width:170px}
-td.memo input{width:100%;min-width:120px}
+td.desc{min-width:110px;max-width:190px;word-break:break-word;font-size:13px}
+td.cat input{width:100%;min-width:0}
+td.vend input{width:100%;min-width:0}
+td.memo input{width:100%;min-width:0}
 .tag{display:inline-block;font-size:12px;padding:1px 7px;border-radius:999px;white-space:nowrap}
 .tag.in{background:var(--good-soft);color:var(--good)}
 .tag.out{background:var(--accent-soft);color:var(--accent)}
@@ -167,8 +167,18 @@ tr.editing td{background:var(--accent-soft)}
 .empty-rules{padding:16px!important;text-align:center;color:var(--muted)}
 .embedded header{display:none!important}
 .embedded .wrap{padding-top:8px}
-td.cust input{width:100%;min-width:150px}
+td.cust input{width:100%;min-width:0}
 .rc{font-size:15px;cursor:help;margin-left:2px}
+/* compact transaction table: fits the window, no sideways scrolling */
+#tbody td, #previewArea th{padding:6px 5px}
+#previewArea table{table-layout:auto}
+#tbody td.cat input,#tbody td.vend input,#tbody td.cust input,#tbody td.memo input{padding:5px 6px;font-size:13px}
+#tbody td.vend .row,#tbody td.cust .row{gap:3px;flex-wrap:nowrap}
+#tbody td.vend .row>input,#tbody td.cust .row>input{flex:1;min-width:0}
+#tbody td.plus{width:1%;padding-left:2px}
+#tbody .tag{font-size:11px;padding:1px 6px}
+#tbody td:nth-child(2){font-size:13px}
+#tbody td.amt{font-size:13px}
 </style>
 </head>
 <body>
@@ -242,7 +252,7 @@ td.cust input{width:100%;min-width:150px}
         <div class="summary" id="summary"></div>
         <div class="table-wrap">
           <table>
-            <thead><tr><th>Include</th><th>Date</th><th>Bank description</th><th>Type</th><th style="text-align:right">Amount</th><th>Category (QuickBooks account)</th><th>Payee</th><th>Customer</th><th>Memo</th><th></th></tr></thead>
+            <thead><tr><th>Include</th><th>Date</th><th>Bank description</th><th>Type</th><th style="text-align:right">Amount</th><th style="width:17%">Category</th><th style="width:15%">Payee</th><th style="width:14%">Customer</th><th style="width:12%">Memo</th><th></th></tr></thead>
             <tbody id="tbody"></tbody>
           </table>
         </div>
@@ -508,7 +518,7 @@ td.cust input{width:100%;min-width:150px}
           <li><b>Payee:</b> who you paid, e.g. <i>Amazon.com</i>. A rule fills it in, or you can type it. Otherwise it stays blank.</li>
           <li><b>Customer:</b> filled in automatically when a receipt scanned on the phone has the <b>same amount and the same payee</b> (closest date, within 30 days). A 🧾 shows it came from a receipt; hover over it to see which one. You can type or change it. It goes on the expense line in QuickBooks (the Customer:Job column), so the customer name must match QuickBooks exactly.</li>
           <li><b>Memo:</b> filled in automatically with the <b>payee's name</b> (e.g. <i>Amazon</i>). When the payee is <b>blank</b>, the memo holds the full bank description (e.g. <i>Amazon.com*5E4250O42</i>) so you can still tell what it was. You can type your own memo on any row.</li>
-          <li><b>+ Rule:</b> makes a rule from that row, so similar transactions get categorized automatically next time.</li>
+          <li><b>+</b> (far right, after Memo): makes a category rule from that row, so similar transactions get categorized automatically next time.</li>
           <li><b>Auto-categorize ☑:</b> on means use your rules. Off means everything goes to <i>Uncategorized</i>.</li>
           <li><span class="ui">⚙ Rules</span> (next to Auto-categorize): category rules, your payee list, and each account's settings.</li>
           <li><span class="ui">+</span> next to a payee: add that payee, or set the words that auto-select it.</li>
@@ -558,7 +568,7 @@ td.cust input{width:100%;min-width:150px}
           <li>Type a short word that's always in the bank description. Capital letters don't matter.</li>
           <li><b>Money</b> can be In, Out, or In or out. A rule can apply to all accounts or just one.</li>
           <li>If two rules match, the one <b>higher in the list wins</b>. Use ↑ ↓ to reorder them.</li>
-          <li>Quick way: click <span class="ui">+ Rule</span> next to a transaction.</li>
+          <li>Quick way: click the <span class="ui">+</span> at the far right of a transaction.</li>
         </ul>
 
         <p><b>🏪 Payees tab: who you paid</b></p>
@@ -1139,7 +1149,7 @@ function renderPreview(){
         el('button',{class:'small', text:'+', title:'Add this payee, or auto-select it for transactions like this', onclick:()=>openRules('vend', row)}))),
       el('td',{class:'cust'}, el('div',{class:'row', style:'flex-wrap:nowrap'}, cus, rcIcon, custWarn)),
       el('td',{class:'memo'}, mem),
-      el('td',null, el('button',{class:'small', text:'+ Rule', title:'Make a category rule from this transaction', onclick:()=>openRules('cat', row)}))
+      el('td',{class:'plus'}, el('button',{class:'small', text:'+', title:'Make a category rule from this transaction', onclick:()=>openRules('cat', row)}))
     );
     tb.append(tr);
   }
@@ -1394,7 +1404,7 @@ function renderRules(){
   sel.value = [...sel.options].some(o=>o.value===keep) ? keep : 'all';
   const tb = $('rulesBody'); tb.innerHTML='';
   $('ruleCount').textContent = S.rules.length + (S.rules.length===1?' rule':' rules');
-  if(!S.rules.length) tb.append(el('tr',null, el('td',{colspan:6, class:'empty-rules', text:'No category rules yet. Add one below, or click "+ Rule" next to a transaction.'})));
+  if(!S.rules.length) tb.append(el('tr',null, el('td',{colspan:6, class:'empty-rules', text:'No category rules yet. Add one below, or click the + at the far right of a transaction.'})));
   S.rules.forEach((r,i)=>{
     const move=(d)=>{ const j=i+d; if(j<0||j>=S.rules.length) return; [S.rules[i],S.rules[j]]=[S.rules[j],S.rules[i]]; rulesChanged(); };
     tb.append(el('tr',{class: r===editingRule?'editing':''},
