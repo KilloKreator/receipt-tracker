@@ -165,8 +165,7 @@ tr.editing td{background:var(--accent-soft)}
 .opt{font-size:11px;opacity:.8}
 .sets div{white-space:nowrap}
 .empty-rules{padding:16px!important;text-align:center;color:var(--muted)}
-.embedded .brand,.embedded #offlineNote{display:none!important}
-.embedded header{justify-content:flex-end;margin-bottom:8px}
+.embedded header{display:none!important}
 .embedded .wrap{padding-top:8px}
 td.cust input{width:100%;min-width:150px}
 .rc{font-size:15px;cursor:help;margin-left:2px}
@@ -191,7 +190,7 @@ td.cust input{width:100%;min-width:150px}
     </div>
   </header>
 
-  <div id="storageWarn" class="msg warn hidden">Settings could not be saved. Is KellerKraft Receipts still running? Use <b>Back up settings</b> to keep a copy.</div>
+  <div id="storageWarn" class="msg warn hidden">Settings could not be saved. Is KellerKraft Receipts still running?</div>
 
   <!-- STEP 1 -->
   <section class="card step">
@@ -606,8 +605,8 @@ td.cust input{width:100%;min-width:150px}
         <h4>Backup &amp; sharing</h4>
         <p>Your accounts, rules and export history are saved by the program in <b>Documents\KellerKraft Receipts</b>, together with your receipts. Payees and customers are the <b>master lists</b> shared with the Receipts tab and the phone (📋 Lists at the top).</p>
         <ul>
-          <li><span class="ui">Back up settings</span> saves everything to a small file. Do this after you add accounts or rules.</li>
-          <li><span class="ui">Load settings</span> brings a backup back, for example on a new computer. It <b>replaces</b> the current accounts and rules.</li>
+          <li>Everything is saved automatically by the program. To copy it to another computer, copy the <b>Documents\KellerKraft Receipts</b> folder.</li>
+          <li><b>☰ → Load converter settings</b> (top-right corner) brings in a backup from the old converter. It <b>replaces</b> the converter's accounts and rules and <b>adds</b> its payees.</li>
         </ul>
         <p><b>Giving the program to someone else:</b></p>
         <ol>
@@ -1623,10 +1622,13 @@ $('btnBackup').addEventListener('click',()=>{
 $('btnRestore').addEventListener('click',()=>$('restoreInput').click());
 $('restoreInput').addEventListener('change', async e=>{
   const f=e.target.files[0]; e.target.value=''; if(!f) return;
+  let s; try{ s = JSON.parse(await readFile(f)); }catch(err){ alert("That file isn't a valid settings backup from this program."); return; }
+  applySettingsObj(s, f.name);
+});
+function applySettingsObj(s, fname){
   try{
-    const s = JSON.parse(await readFile(f));
     if(!validSettings(s) || !s.accounts.length) throw new Error();
-    if(!confirm(`Load ${s.accounts.length} account(s) and ${(s.rules||[]).length} rule(s) from "${f.name}"?\n\nThis REPLACES the accounts and rules in the converter. Payees are ADDED to your master payee list.`)) return;
+    if(!confirm(`Load ${s.accounts.length} account(s) and ${(s.rules||[]).length} rule(s) from "${fname}"?\n\nThis REPLACES the accounts and rules in the converter. Payees are ADDED to your master payee list.`)) return;
     const merged = new Map((S.vendorList||[]).map(v=>[lc(v.name), {name:v.name, words:(v.words||[]).slice()}]));
     const incoming = Array.isArray(s.vendorList) ? s.vendorList : (Array.isArray(s.vendors) ? s.vendors.map(n=>({name:n, words:[]})) : []);
     incoming.forEach(v=>{ const k=lc(v.name); if(!k) return; const m=merged.get(k); if(m){ (v.words||[]).forEach(w=>{ if(!m.words.some(x=>lc(x)===lc(w))) m.words.push(w); }); } else merged.set(k,{name:norm(v.name), words:(v.words||[]).slice()}); });
@@ -1635,7 +1637,8 @@ $('restoreInput').addEventListener('change', async e=>{
     $('autoCat').checked=S.autoCat; renderAccounts(); renderPreview();
     alert('Settings loaded.');
   }catch(err){ alert("That file isn't a valid settings backup from this program."); }
-});
+}
+window.KKApplySettings = applySettingsObj;
 const TOPICS=[...document.querySelectorAll('#tutNav button')].map(b=>b.dataset.topic);
 let curTopic='start';
 function showTopic(t){
@@ -1669,6 +1672,7 @@ window.KKRefresh = async ()=>{
   }catch(e){}
 };
 
+window.KKOpenHelp = () => openHelp('start');
 /* ---------------- Start ---------------- */
 const firstRun = !S.seenTutorial;
 S.seenTutorial = true;
@@ -1676,6 +1680,7 @@ saveSettings();
 renderAccounts();
 renderPreview();
 if(firstRun) openHelp('start');
+window.KKReady = true;
 };
 </script>
 <script>

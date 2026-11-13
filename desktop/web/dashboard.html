@@ -73,6 +73,11 @@ input[type=checkbox]{width:17px;height:17px;accent-color:var(--accent)}
 .ok{color:var(--good);font-weight:600}.bad{color:var(--bad);font-weight:600}
 .toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#222;color:#fff;padding:10px 16px;border-radius:10px;z-index:50}
 .hidden{display:none!important}
+.menuwrap{position:relative}
+.menubtn{font-size:18px;line-height:1;padding:7px 12px}
+.menu{position:absolute;right:0;top:calc(100% + 6px);z-index:40;min-width:250px;background:var(--card);border:1px solid var(--line);border-radius:10px;box-shadow:0 10px 30px rgba(0,0,0,.18);padding:6px;display:flex;flex-direction:column}
+.menu button{border:none;text-align:left;padding:9px 12px;border-radius:7px;background:none}
+.menu button:hover{background:var(--soft)}
 .fgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:10px}
 .fcard{display:flex;gap:12px;align-items:center;text-align:left;padding:12px 14px;border:1px solid var(--line);border-radius:10px;background:var(--card);cursor:pointer;font:inherit;color:var(--text)}
 .fcard:hover{border-color:var(--accent);background:var(--soft)}
@@ -108,9 +113,17 @@ tr.picked td{background:var(--soft)}
   </div>
   <div class="tools">
     <div class="row">
-      <button id="bSetup">📱 Phone setup</button>
       <button id="bLists">📋 Lists</button>
       <button id="bSettings">⚙ Settings</button>
+      <div class="menuwrap">
+        <button id="bMenu" class="menubtn" aria-label="Menu" aria-haspopup="true" aria-expanded="false" title="Menu">☰</button>
+        <div class="menu hidden" id="menu" role="menu">
+          <button role="menuitem" id="bSetup">📱 Phone setup</button>
+          <button role="menuitem" id="mLoad">⬆ Load converter settings…</button>
+          <button role="menuitem" id="mHelp">📘 Converter tutorial</button>
+        </div>
+      </div>
+      <input type="file" id="loadFile" accept=".json,application/json" class="hidden">
     </div>
     <span class="pill" id="status">Starting…</span>
   </div>
@@ -146,8 +159,10 @@ tr.picked td{background:var(--soft)}
     <button class="small" id="bAll">Select all</button><button class="small" id="bNone">Select none</button>
     <span id="selSum" class="muted"></span>
     <span style="flex:1"></span>
-    <label class="check muted"><input type="checkbox" id="cSummary" checked> Include a summary list (opens in Excel)</label>
-    <button class="primary" id="bSaveSel">💾 Save selected to folder…</button>
+    <label class="muted">Receipts per page <select id="perPage"><option value="1">1</option><option value="2" selected>2</option><option value="4">4</option><option value="6">6</option></select></label>
+    <label class="check muted" title="When saving to a folder, also save a list of the receipts that opens in Excel"><input type="checkbox" id="cSummary" checked> Summary list (folder)</label>
+    <button class="primary" id="bPDF">📄 Make PDF…</button>
+    <button id="bSaveSel" title="Copy the scans (and a summary list) into a folder">💾 Save to folder…</button>
   </div>
   <div id="saveMsg"></div>
   <div class="table-wrap" style="margin-top:10px"><table>
@@ -264,6 +279,7 @@ tr.picked td{background:var(--soft)}
 <datalist id="payeeList"></datalist><datalist id="custList"></datalist><datalist id="catList"></datalist>
 <div class="toast hidden" id="toast"></div>
 <script src="/assets/qbimport.js"></script>
+<script src="/assets/receiptpdf.js"></script>
 
 <script>
 'use strict';
@@ -382,8 +398,8 @@ function renderCustomer() {
 }
 function selSum() {
   const rs = filtered(), pick = S.receipts.filter(r => selected.has(r.id));
-  $('selSum').textContent = pick.length ? `${plural(pick.length, 'receipt')} selected · ${money(sumOf(pick))}` : 'Tick the receipts you want to save.';
-  $('bSaveSel').disabled = !pick.length;
+  $('selSum').textContent = pick.length ? `${plural(pick.length, 'receipt')} selected · ${money(sumOf(pick))}` : 'Tick the receipts you want.';
+  $('bSaveSel').disabled = !pick.length; $('bPDF').disabled = !pick.length;
   const vis = rs.filter(r => selected.has(r.id)).length;
   $('cHead').checked = rs.length > 0 && vis === rs.length; $('cHead').indeterminate = vis > 0 && vis < rs.length;
 }
@@ -445,6 +461,57 @@ $('bSaveSel').onclick = async () => {
   } catch (e) { msgSave('bad', 'Saving stopped: ' + e.message); }
   finally { rs.forEach(r => delete r._file); selSum(); }
 };
+/* PDF of the ticked receipts */
+$('bPDF').onclick = async () => {
+  const rs = S.receipts.filter(r => selected.has(r.id)).sort((a, b) => (a.date || '').localeCompare(b.date || ''));
+  if (!rs.length) return;
+  const label = curCust === '(all)' ? 'All customers' : curCust === '(none)' ? 'No customer' : curCust;
+  const name = `${safeName(label)} receipts ${new Date().toISOString().slice(0, 10)}.pdf`;
+  let handle = null;
+  if (window.showSaveFilePicker) {        // ask where to save first (needs the click)
+    try { handle = await window.showSaveFilePicker({ id: 'kk-pdf', suggestedName: name, startIn: 'documents', types: [{ description: 'PDF file', accept: { 'application/pdf': ['.pdf'] } }] }); }
+    catch (e) { if (e.name === 'AbortError') return; handle = null; }
+  }
+  $('bPDF').disabled = true; msgSave('', 'Making the PDF…');
+  try {
+    const items = [];
+    for (const r of rs) {
+      let image = null;
+      if (r.hasImage) image = new Uint8Array(await (await fetch(`/img/${r.id}.jpg`)).arrayBuffer());
+      items.push({ date: r.date, payee: r.payee || r.memo, total: r.total, note: r.note, category: r.category, image });
+    }
+    const blob = ReceiptPDF.build({ title: `${label} — Receipts`, receipts: items, perPage: +$('perPage').value });
+    if (handle) { const w = await handle.createWritable(); await w.write(blob); await w.close(); msgSave('good', `✓ Saved "${handle.name}" (${plural(rs.length, 'receipt')}, ${money(sumOf(rs))}).`); }
+    else { const a = el('a', { href: URL.createObjectURL(blob), download: name }); document.body.append(a); a.click(); a.remove(); msgSave('good', `✓ Saved "${name}" to your Downloads folder.`); }
+    toast('PDF ready ✓');
+  } catch (e) { msgSave('bad', "Couldn't make the PDF: " + e.message); }
+  finally { selSum(); }
+};
+try { const pp = localStorage.getItem('kk.perPage'); if (pp) $('perPage').value = pp; } catch (e) {}
+$('perPage').onchange = () => { try { localStorage.setItem('kk.perPage', $('perPage').value); } catch (e) {} };
+
+/* ☰ menu */
+function closeMenu() { $('menu').classList.add('hidden'); $('bMenu').setAttribute('aria-expanded', 'false'); }
+$('bMenu').onclick = e => { e.stopPropagation(); const open = $('menu').classList.toggle('hidden'); $('bMenu').setAttribute('aria-expanded', String(!open)); };
+document.addEventListener('click', e => { if (!e.target.closest('.menuwrap')) closeMenu(); });
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeMenu(); });
+$('menu').addEventListener('click', e => { if (e.target.closest('button')) closeMenu(); });
+function withConverter(fn) {             // open the converter tab, then run fn once it's ready
+  showMain('converter');
+  const f = $('convFrame');
+  const ready = () => f.contentWindow && f.contentWindow.KKReady;
+  if (ready()) return fn(f.contentWindow);
+  const t = setInterval(() => { if (ready()) { clearInterval(t); fn(f.contentWindow); } }, 150);
+  setTimeout(() => clearInterval(t), 15000);
+}
+$('mHelp').onclick = () => withConverter(w => w.KKOpenHelp());
+$('mLoad').onclick = () => $('loadFile').click();
+$('loadFile').onchange = async e => {
+  const f = e.target.files[0]; e.target.value = ''; if (!f) return;
+  let data; try { data = JSON.parse(await f.text()); } catch (err) { alert("That file isn't a KellerKraft Time Saver settings backup."); return; }
+  withConverter(w => w.KKApplySettings(data, f.name));
+};
+
 function msgSave(kind, text) {
   const m = $('saveMsg'); m.innerHTML = '';
   if (text) m.append(el('div', { class: 'savemsg ' + kind, text }));
