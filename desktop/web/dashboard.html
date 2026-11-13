@@ -44,6 +44,7 @@ tfoot td{font-weight:700;background:var(--bg)}
 .big{font-size:28px;font-weight:700;font-variant-numeric:tabular-nums}
 .empty{padding:28px;text-align:center;color:var(--muted)}
 .tag{font-size:12px;padding:1px 8px;border-radius:999px;background:var(--soft);color:var(--accent);white-space:nowrap}
+.tag.pdf{background:var(--good-soft);color:var(--good);display:inline-block;margin-top:3px}
 .tag.none{background:var(--warn-soft);color:var(--warn)}
 dialog{border:1px solid var(--line);border-radius:12px;background:var(--card);color:var(--text);padding:0;width:min(980px,calc(100vw - 24px));max-height:calc(100vh - 40px)}
 dialog.narrow{width:min(620px,calc(100vw - 24px))}
@@ -156,7 +157,7 @@ tr.picked td{background:var(--soft)}
     <span class="muted" id="fSum"></span>
   </div>
   <div class="savebar">
-    <button class="small" id="bAll">Select all</button><button class="small" id="bNone">Select none</button>
+    <button class="small" id="bAll" title="Ticks every receipt shown that isn't in a PDF yet">Select all</button><button class="small" id="bNone">Select none</button>
     <span id="selSum" class="muted"></span>
     <span style="flex:1"></span>
     <label class="muted">Receipts per page <select id="perPage"><option value="1">1</option><option value="2" selected>2</option><option value="4">4</option><option value="6">6</option></select></label>
@@ -191,7 +192,7 @@ tr.picked td{background:var(--soft)}
       <details style="margin-top:8px"><summary class="muted">Text read from the receipt</summary><pre id="recOcr" class="muted" style="white-space:pre-wrap"></pre></details>
     </div>
   </div></div>
-  <div class="df"><button type="button" class="danger" id="recDel">Delete receipt</button>
+  <div class="df"><div class="row"><button type="button" class="danger" id="recDel">Delete receipt</button><button type="button" id="recUnPdf" class="hidden" title="Use this if the PDF was lost or needs to be made again">Not in a PDF anymore</button></div>
     <div class="row"><button type="button" data-close>Cancel</button><button type="button" class="primary" id="recSave">Save</button></div></div>
 </form></dialog>
 
@@ -383,7 +384,8 @@ function renderCustomer() {
       el('td', { class: 'chk' }, cb),
       el('td', { class: 'thumb' }, r.hasImage ? el('img', { src: `/img/${r.id}.jpg?v=${r.received}`, alt: '', loading: 'lazy' }) : ''),
       el('td', { text: fmtDate(r.date), style: 'white-space:nowrap' }),
-      el('td', null, r.payee || r.memo || '', curCust === '(all)' && r.customer ? el('div', { class: 'muted', text: r.customer }) : null),
+      el('td', null, r.payee || r.memo || '', curCust === '(all)' && r.customer ? el('div', { class: 'muted', text: r.customer }) : null,
+        r.pdfAt ? el('div', null, el('span', { class: 'tag pdf', text: '📄 In PDF ' + new Date(r.pdfAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }), title: `Put in a PDF on ${new Date(r.pdfAt).toLocaleString()}${r.pdfName ? ': ' + r.pdfName : ''}` })) : null),
       el('td', { text: r.category || '' }),
       el('td', { class: 'amt', text: money(r.total) }), el('td', { class: 'muted', text: r.note || '' }));
     cb.addEventListener('click', e => e.stopPropagation());
@@ -405,7 +407,11 @@ function selSum() {
 }
 ['fFrom', 'fTo', 'fText'].forEach(id => $(id).addEventListener('input', renderCustomer));
 $('fClear').onclick = () => { $('fFrom').value = ''; $('fTo').value = ''; $('fText').value = ''; renderCustomer(); };
-$('bAll').onclick = () => { filtered().forEach(r => selected.add(r.id)); renderCustomer(); };
+$('bAll').onclick = () => {
+  const rs = filtered(), fresh = rs.filter(r => !r.pdfAt);
+  fresh.forEach(r => selected.add(r.id)); renderCustomer();
+  if (fresh.length < rs.length) toast(`Skipped ${plural(rs.length - fresh.length, 'receipt')} already in a PDF. Tick them yourself if you need them.`);
+};
 $('bNone').onclick = () => { selected.clear(); renderCustomer(); };
 $('cHead').onchange = () => { if ($('cHead').checked) $('bAll').click(); else { filtered().forEach(r => selected.delete(r.id)); renderCustomer(); } };
 
@@ -465,6 +471,9 @@ $('bSaveSel').onclick = async () => {
 $('bPDF').onclick = async () => {
   const rs = S.receipts.filter(r => selected.has(r.id)).sort((a, b) => (a.date || '').localeCompare(b.date || ''));
   if (!rs.length) return;
+  const done = rs.filter(r => r.pdfAt);
+  if (done.length && !confirm(`${done.length} of the ${rs.length} selected receipt${rs.length === 1 ? ' is' : 's are'} already in a PDF:\n\n` +
+      done.slice(0, 8).map(r => `• ${fmtDate(r.date)} ${r.payee || ''} ${money(r.total)} (${r.pdfName || 'PDF'})`).join('\n') + (done.length > 8 ? '\n…' : '') + '\n\nMake the PDF anyway?')) return;
   const label = curCust === '(all)' ? 'All customers' : curCust === '(none)' ? 'No customer' : curCust;
   const name = `${safeName(label)} receipts ${new Date().toISOString().slice(0, 10)}.pdf`;
   let handle = null;
@@ -481,8 +490,11 @@ $('bPDF').onclick = async () => {
       items.push({ date: r.date, payee: r.payee || r.memo, total: r.total, note: r.note, category: r.category, image });
     }
     const blob = ReceiptPDF.build({ title: `${label} — Receipts`, receipts: items, perPage: +$('perPage').value });
-    if (handle) { const w = await handle.createWritable(); await w.write(blob); await w.close(); msgSave('good', `✓ Saved "${handle.name}" (${plural(rs.length, 'receipt')}, ${money(sumOf(rs))}).`); }
-    else { const a = el('a', { href: URL.createObjectURL(blob), download: name }); document.body.append(a); a.click(); a.remove(); msgSave('good', `✓ Saved "${name}" to your Downloads folder.`); }
+    let saved = name;
+    if (handle) { const w = await handle.createWritable(); await w.write(blob); await w.close(); saved = handle.name; msgSave('good', `✓ Saved "${handle.name}" (${plural(rs.length, 'receipt')}, ${money(sumOf(rs))}). They're now marked 📄 In PDF.`); }
+    else { const a = el('a', { href: URL.createObjectURL(blob), download: name }); document.body.append(a); a.click(); a.remove(); msgSave('good', `✓ Saved "${name}" to your Downloads folder. They're now marked 📄 In PDF.`); }
+    await post('/local/markpdf', { ids: rs.map(r => r.id), name: saved });
+    selected.clear(); sig = ''; await refresh();
     toast('PDF ready ✓');
   } catch (e) { msgSave('bad', "Couldn't make the PDF: " + e.message); }
   finally { selSum(); }
@@ -524,7 +536,9 @@ function openRec(r) {
   $('recImg').src = r.hasImage ? `/img/${r.id}.jpg?v=${r.received}` : '';
   $('eDate').value = r.date || ''; $('eTotal').value = r.total == null ? '' : r.total.toFixed(2);
   $('ePayee').value = r.payee || ''; $('eMemo').value = r.memo || ''; $('eCust').value = r.customer || ''; $('eCat').value = r.category || ''; $('eNote').value = r.note || '';
-  $('recMeta').textContent = `Scanned ${new Date(r.created).toLocaleString()} · received ${new Date(r.received).toLocaleString()}`;
+  $('recMeta').textContent = `Scanned ${new Date(r.created).toLocaleString()} · received ${new Date(r.received).toLocaleString()}` +
+    (r.pdfAt ? ` · 📄 put in a PDF ${new Date(r.pdfAt).toLocaleString()}${r.pdfName ? ' (' + r.pdfName + ')' : ''}` : '');
+  $('recUnPdf').classList.toggle('hidden', !r.pdfAt);
   $('recOcr').textContent = r.ocrText || '(none)';
   editing.memoManual = !!r.memoManual;
   $('dRec').showModal();
@@ -542,6 +556,9 @@ $('recSave').onclick = async () => {
     memo: editing.memoManual ? norm($('eMemo').value) : payee, memoManual: editing.memoManual,
     customer: canon(S.customers, $('eCust').value), category: canon(S.categories, $('eCat').value), note: $('eNote').value.trim() });
   try { await post('/local/receipt', body); $('dRec').close(); toast('Saved ✓'); sig = ''; refresh(); } catch (e) { alert('Could not save: ' + e.message); }
+};
+$('recUnPdf').onclick = async () => {
+  try { await post('/local/markpdf', { ids: [editing.id], clear: true }); $('dRec').close(); toast('Mark removed. It can go in a new PDF.'); sig = ''; refresh(); } catch (e) { alert(e.message); }
 };
 $('recDel').onclick = async () => {
   if (!confirm('Delete this receipt? (The photo is kept in the "deleted" folder, just in case.)')) return;

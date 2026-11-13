@@ -34,7 +34,7 @@ import (
 )
 
 const (
-	appVersion = "0.2.3"
+	appVersion = "0.2.4"
 	httpPort   = 8780 // dashboard + phone setup page
 	httpsPort  = 8443 // phone sync
 	phoneApp   = "https://killokreator.github.io/receipt-tracker/"
@@ -71,9 +71,21 @@ func main() {
 	// Already running? Just open the dashboard.
 	ln, err := net.Listen("tcp", fmt.Sprintf(":%d", httpPort))
 	if err != nil {
-		log.Printf("already running (%v); opening dashboard", err)
-		openBrowser(fmt.Sprintf("http://localhost:%d/", httpPort))
-		return
+		// Already running. If it's a different version (e.g. you just installed an update),
+		// ask it to stop and take over; otherwise just open the dashboard.
+		if old := runningVersion(); old != "" && old != appVersion {
+			log.Printf("version %s is running; replacing it with %s", old, appVersion)
+			stopRunning()
+			for i := 0; i < 40 && err != nil; i++ {
+				time.Sleep(250 * time.Millisecond)
+				ln, err = net.Listen("tcp", fmt.Sprintf(":%d", httpPort))
+			}
+		}
+		if err != nil {
+			log.Printf("already running (%v); opening dashboard", err)
+			openBrowser(fmt.Sprintf("http://localhost:%d/", httpPort))
+			return
+		}
 	}
 
 	if store, err = openStore(dataDir); err != nil {
@@ -122,6 +134,39 @@ func main() {
 	}()
 	srv := &http.Server{Handler: localSite(), ReadHeaderTimeout: 20 * time.Second}
 	log.Fatal(srv.Serve(ln))
+}
+
+// Version of the copy that is already running ("" if it can't be asked)
+func runningVersion() string {
+	c := http.Client{Timeout: 3 * time.Second}
+	resp, err := c.Get(fmt.Sprintf("http://127.0.0.1:%d/local/version", httpPort))
+	if err != nil {
+		return ""
+	}
+	defer resp.Body.Close()
+	var v struct{ Version string }
+	if resp.StatusCode != 200 {
+		// versions before 0.2.4 have no /local/version: ask the full state instead
+		r2, err := c.Get(fmt.Sprintf("http://127.0.0.1:%d/local/state", httpPort))
+		if err != nil {
+			return ""
+		}
+		defer r2.Body.Close()
+		json.NewDecoder(r2.Body).Decode(&v)
+		return v.Version
+	}
+	json.NewDecoder(resp.Body).Decode(&v)
+	return v.Version
+}
+
+func stopRunning() {
+	req, _ := http.NewRequest("POST", fmt.Sprintf("http://127.0.0.1:%d/local/quit", httpPort), strings.NewReader("{}"))
+	req.Header.Set("X-KK", "1")
+	req.Header.Set("Content-Type", "application/json")
+	c := http.Client{Timeout: 3 * time.Second}
+	if resp, err := c.Do(req); err == nil {
+		resp.Body.Close()
+	}
 }
 
 func fatal(msg string) {
@@ -249,6 +294,7 @@ func phoneAPI() http.Handler {
 			if !rec.HasImage {
 				rec.HasImage = old.HasImage
 			}
+			rec.PdfAt, rec.PdfName = old.PdfAt, old.PdfName // the phone doesn't know about PDFs
 			*old = rec
 		} else {
 			store.data.Receipts = append(store.data.Receipts, &rec)
@@ -534,6 +580,35 @@ func localSite() http.Handler {
 		}
 		writeJSON(w, 200, map[string]bool{"ok": true})
 	}))
+	mux.HandleFunc("/local/markpdf", local(func(w http.ResponseWriter, r *http.Request) {
+		var in struct {
+			IDs   []string
+			Name  string
+			Clear bool
+		}
+		if json.NewDecoder(io.LimitReader(r.Body, 1<<20)).Decode(&in) != nil {
+			jsonErr(w, 400, "bad request")
+			return
+		}
+		store.mu.Lock()
+		defer store.mu.Unlock()
+		now := time.Now().UnixMilli()
+		for _, id := range in.IDs {
+			if rec := store.findReceipt(id); rec != nil {
+				if in.Clear {
+					rec.PdfAt, rec.PdfName = 0, ""
+				} else {
+					rec.PdfAt, rec.PdfName = now, in.Name
+				}
+				rec.Updated = now
+			}
+		}
+		if err := store.save(); err != nil {
+			jsonErr(w, 500, err.Error())
+			return
+		}
+		writeJSON(w, 200, map[string]bool{"ok": true})
+	}))
 	mux.HandleFunc("/local/delete", local(func(w http.ResponseWriter, r *http.Request) {
 		var in struct{ ID string }
 		if json.NewDecoder(io.LimitReader(r.Body, 4096)).Decode(&in) != nil || !idRe.MatchString(in.ID) {
@@ -625,6 +700,9 @@ func localSite() http.Handler {
 	mux.HandleFunc("/local/openfolder", local(func(w http.ResponseWriter, r *http.Request) {
 		openFolder(dataDir)
 		writeJSON(w, 200, map[string]bool{"ok": true})
+	}))
+	mux.HandleFunc("/local/version", local(func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, 200, map[string]string{"version": appVersion})
 	}))
 	mux.HandleFunc("/local/quit", local(func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, 200, map[string]bool{"ok": true})

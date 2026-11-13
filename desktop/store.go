@@ -33,6 +33,9 @@ type Receipt struct {
 	Note       string   `json:"note"`
 	OCRText    string   `json:"ocrText"`
 	HasImage   bool     `json:"hasImage"`
+	// Set when the receipt has been put in a PDF (to avoid putting it in twice)
+	PdfAt   int64  `json:"pdfAt,omitempty"`
+	PdfName string `json:"pdfName,omitempty"`
 }
 
 type Device struct {
