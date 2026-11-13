@@ -239,7 +239,7 @@ td.cust input{width:100%;min-width:0}
       <div class="row" style="justify-content:space-between">
         <div class="row">
         <button type="button" id="btnRules">⚙ Rules</button>
-        <label class="check"><input type="checkbox" id="autoCat"> <span><b>Auto-categorize</b> using my rules <button type="button" class="link hlink" data-help="cats" style="margin-left:2px">(how rules work)</button> <span class="muted">(off = everything goes to Uncategorized)</span></span></label>
+        <label class="check"><input type="checkbox" id="autoCat"> <span><b>Auto-categorize</b> using my category rules <button type="button" class="link hlink" data-help="cats" style="margin-left:2px">(how rules work)</button> <span class="muted">(off = everything goes to Uncategorized)</span></span></label>
         </div>
         <div class="row">
           <button class="small" id="btnAll">Select all</button>
@@ -249,6 +249,8 @@ td.cust input{width:100%;min-width:0}
       </div>
       <div id="emptyState" class="muted" style="margin-top:12px">Choose a file in step 2 to see its transactions here.</div>
       <div id="previewArea" class="hidden">
+        <div id="namesWarn" class="msg warn hidden">⚠ <b>Some payees were not filled in.</b> Payees are only picked by their name when <i>"Also auto-select a payee when its name appears"</i> is on. <button type="button" class="small" id="namesOn">Turn it on</button></div>
+        <div id="payeeWarn" class="msg warn hidden">⚠ <b>Your payee list is empty</b> (or nearly), so payees can't be filled in automatically. Import it from QuickBooks: <button type="button" class="small" id="openLists">📋 Open Lists</button> → 🏪 Payees → 📄 Import from QuickBooks report.</div>
         <div class="summary" id="summary"></div>
         <div class="table-wrap">
           <table>
@@ -767,9 +769,8 @@ function normalize(s){
   s.rules.forEach(r=>{ delete r.vendor; });
   // Always use "The Home Depot" (never "Home Depot") for Home Depot charges
   if(!s.homeDepotRules){
-    let v=findV('The Home Depot'); if(!v){ v={name:'The Home Depot', words:[]}; s.vendorList.push(v); }
-    addWord(v,'HOME DEPOT'); addWord(v,'HOMEDEPOT');
-    s.homeDepotRules = true;
+    const v=findV('The Home Depot');          // only once it's on your payee list
+    if(v){ addWord(v,'HOME DEPOT'); addWord(v,'HOMEDEPOT'); s.homeDepotRules = true; }
   }
   s.vendorList.sort((a,b)=>a.name.localeCompare(b.name,undefined,{sensitivity:'base'}));
   if(s.useVendorList===undefined) s.useVendorList = true;
@@ -946,7 +947,8 @@ function applyCategories(){
   if(!loaded) return;
   const acc = currentAccount(); if(!acc) return;
   for(const row of loaded.rows){
-    const res = S.autoCat ? resolveRules(acc,row) : {category:null, vendor:null};
+    const res = resolveRules(acc,row);          // payees are always filled in
+    if(!S.autoCat) res.category = null;        // Auto-categorize only controls categories
     if(!row.manual){ row.category = res.category || (row.dir==='out' ? acc.uncatOut : acc.uncatIn); row.ruled = !!res.category; }
     if(!row.manualV){ row.vendor = res.vendor || ''; row.vRuled = !!res.vendor; row.vFrom = res.vendorFrom; }
     if(!row.manualM) row.memo = autoMemo(row);
@@ -1156,6 +1158,10 @@ function renderPreview(){
   renderSummary();
 }
 function renderSummary(){
+  $('payeeWarn').classList.toggle('hidden', (S.vendorList||[]).length >= 5);
+  const missed = (S.useVendorList===false && loaded) ? loaded.rows.filter(r=>!norm(r.vendor) && matchVendorList(r.desc)).length : 0;
+  $('namesWarn').classList.toggle('hidden', !missed);
+  if(missed) $('namesWarn').querySelector('b').textContent = `${missed} payee${missed===1?' was':'s were'} not filled in.`;
   const acc = currentAccount(); if(!loaded||!acc) return;
   const inc = loaded.rows.filter(r=>r.include);
   const out = inc.filter(r=>r.dir==='out').reduce((s,r)=>s+r.amount,0);
@@ -1682,7 +1688,10 @@ window.KKRefresh = async ()=>{
     const d = await (await fetch('/local/converter', {cache:'no-store'})).json();
     KK.customers = d.customers; KK.categories = d.categories; KK.receipts = d.receipts;
     const pj = JSON.stringify(d.payees||[]);
-    if(pj !== lastPayees){ S.vendorList = (d.payees||[]).map(p=>({name:p.name, words:(p.words||[]).slice()})); lastPayees = pj; vendorIndex = null; }
+    if(pj !== lastPayees){
+      S.vendorList = (d.payees||[]).map(p=>({name:p.name, words:(p.words||[]).slice()})); lastPayees = pj; vendorIndex = null;
+      if(!S.homeDepotRules && S.vendorList.some(v=>lc(v.name)==='the home depot')){ S = normalize(S); saveSettings(); }
+    }
     if(typeof d.useNames==='boolean') S.useVendorList = d.useNames;
     refreshCatList();
     if(loaded){ applyCategories(); renderPreview(); }
@@ -1690,6 +1699,8 @@ window.KKRefresh = async ()=>{
 };
 
 window.KKOpenHelp = () => openHelp('start');
+$('namesOn').addEventListener('click',()=>{ S.useVendorList = true; vendorIndex = null; saveSettings(); applyCategories(); renderPreview(); });
+$('openLists').addEventListener('click',()=>{ try{ window.parent.document.getElementById('bLists').click(); }catch(e){ alert('Click 📋 Lists at the top of the page.'); } });
 /* ---------------- Start ---------------- */
 const firstRun = !S.seenTutorial;
 S.seenTutorial = true;

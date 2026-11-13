@@ -1,6 +1,6 @@
 /* KellerKraft Receipts — phone app */
 'use strict';
-const VERSION = '0.1.3';
+const VERSION = '0.1.4';
 const DEFAULT_CATEGORY = 'Uncategorized Expenses';
 const $ = id => document.getElementById(id);
 const norm = s => String(s == null ? '' : s).replace(/\s+/g, ' ').trim();
@@ -269,7 +269,7 @@ function payeeNames() { return (lists.payees || []).map(p => p.name); }
 function canonPayee(n) { const k = lc(n); if (!k) return ''; return payeeNames().find(p => lc(p) === k) || norm(n); }
 function setPayee(name) {
   current.payee = canonPayee(name); $('fPayee').value = current.payee;
-  if (!current.memoManual) { current.memo = current.payee; $('fMemo').value = current.memo; }
+  if (!current.memoManual) current.memo = current.payee;      // memo = payee (not shown on the phone)
   $('storeHint').classList.add('hidden');
   $('payeeSug').classList.add('hidden');
 }
@@ -288,8 +288,7 @@ function openEdit(rec, fresh) {
   $('fDate').value = rec.date || '';
   $('fTotal').value = rec.total != null ? Number(rec.total).toFixed(2) : '';
   $('fPayee').value = rec.payee || '';
-  $('fMemo').value = rec.memo || '';
-  fillSelect($('fCustomer'), lists.customers, rec.customer, '— Choose customer —', '➕ Add new customer…');
+  $('fCustomer').value = rec.customer || '';
   fillSelect($('fCategory'), lists.categories.concat([DEFAULT_CATEGORY]), rec.category, '— Choose category —', '➕ Add new category…');
   $('fNote').value = rec.note || '';
   $('editMeta').textContent = fresh ? '' : `Scanned ${new Date(rec.created).toLocaleString()} · ${rec.synced ? 'On your computer ✓' : 'Waiting to sync'}`;
@@ -298,89 +297,99 @@ function openEdit(rec, fresh) {
   $('scr-edit').querySelector('.scroll').scrollTop = 0;
 }
 ['fDate', 'fTotal', 'fNote'].forEach(id => $(id).addEventListener('input', () => { dirty = true; touched.add(id.slice(1).toLowerCase()); }));
+
+/* Type-and-pick lists under a box (iPhone Safari only shows typed suggestions above the keyboard) */
+function setupAC(input, ul, getNames, onPick, word, showAllWhenEmpty) {
+  let picking = false, hl = -1;
+  function matches(q) {
+    q = lc(q);
+    const names = getNames();
+    if (!q) return showAllWhenEmpty ? names.slice().sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' })).slice(0, 60) : [];
+    const starts = [], words = [], contains = [];
+    for (const n of names) {
+      const l = lc(n);
+      if (l.startsWith(q)) starts.push(n);
+      else if (l.split(/[^a-z0-9]+/).some(w => w.startsWith(q))) words.push(n);
+      else if (l.includes(q)) contains.push(n);
+    }
+    return starts.concat(words, contains).slice(0, 10);
+  }
+  function render() {
+    const v = input.value, q = lc(v), list = matches(v);
+    ul.innerHTML = '';
+    if ((!q && !list.length) || (list.length === 1 && lc(list[0]) === q)) { ul.classList.add('hidden'); return; }
+    list.forEach((n, i) => {
+      const li = document.createElement('li');
+      const k = q ? lc(n).indexOf(q) : -1;
+      if (k >= 0) { li.append(n.slice(0, k)); const b = document.createElement('b'); b.textContent = n.slice(k, k + q.length); li.append(b, n.slice(k + q.length)); }
+      else li.textContent = n;
+      if (i === hl) li.classList.add('hl');
+      li.addEventListener('pointerdown', e => { e.preventDefault(); picking = true; });
+      li.addEventListener('click', () => pick(n));
+      ul.append(li);
+    });
+    if (q && !list.some(n => lc(n) === q)) {
+      const li = document.createElement('li'); li.className = 'new';
+      li.textContent = `➕ Use "${norm(v)}" (new ${word})`;
+      li.addEventListener('pointerdown', e => { e.preventDefault(); picking = true; });
+      li.addEventListener('click', () => pick(norm(v)));
+      ul.append(li);
+    }
+    ul.classList.remove('hidden');
+  }
+  function pick(n) { picking = false; hl = -1; onPick(n); ul.classList.add('hidden'); input.blur(); }
+  input.addEventListener('input', () => { hl = -1; render(); });
+  input.addEventListener('focus', () => { render(); setTimeout(() => input.scrollIntoView({ block: 'start', behavior: 'smooth' }), 250); });
+  input.addEventListener('blur', () => setTimeout(() => { if (!picking) ul.classList.add('hidden'); }, 150));
+  input.addEventListener('keydown', e => {
+    const items = [...ul.querySelectorAll('li')];
+    if (!items.length || ul.classList.contains('hidden')) return;
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); hl = (hl + (e.key === 'ArrowDown' ? 1 : -1) + items.length) % items.length; render(); }
+    else if (e.key === 'Enter' && hl >= 0) { e.preventDefault(); items[hl].click(); }
+    else if (e.key === 'Escape') ul.classList.add('hidden');
+  });
+  return { picking: () => picking, hide: () => ul.classList.add('hidden') };
+}
+
+/* Payee */
 $('fPayee').addEventListener('input', () => {
   dirty = true; touched.add('payee'); current.payee = norm($('fPayee').value);
-  if (!current.memoManual) { current.memo = current.payee; $('fMemo').value = current.memo; }
-});
-$('fPayee').addEventListener('change', () => { if (!acPicking) setPayee($('fPayee').value); });
-
-/* Payee dropdown under the box (iPhone Safari doesn't show a list for typed suggestions) */
-let acPicking = false, acHl = -1;
-function payeeMatches(q) {
-  q = lc(q); if (!q) return [];
-  const starts = [], words = [], contains = [];
-  for (const n of payeeNames()) {
-    const l = lc(n);
-    if (l.startsWith(q)) starts.push(n);
-    else if (l.split(/[^a-z0-9]+/).some(w => w.startsWith(q))) words.push(n);
-    else if (l.includes(q)) contains.push(n);
-  }
-  return starts.concat(words, contains).slice(0, 8);
-}
-function renderPayeeSug() {
-  const ul = $('payeeSug'), v = $('fPayee').value, q = lc(v);
-  const list = payeeMatches(v);
-  ul.innerHTML = '';
-  if (!q || (list.length === 1 && lc(list[0]) === q)) { ul.classList.add('hidden'); return; }
-  list.forEach((n, i) => {
-    const li = document.createElement('li');
-    const k = lc(n).indexOf(q);
-    if (k >= 0) { li.append(n.slice(0, k)); const b = document.createElement('b'); b.textContent = n.slice(k, k + q.length); li.append(b, n.slice(k + q.length)); }
-    else li.textContent = n;
-    if (i === acHl) li.classList.add('hl');
-    li.addEventListener('pointerdown', e => { e.preventDefault(); acPicking = true; });
-    li.addEventListener('click', () => { pickPayee(n); });
-    ul.append(li);
-  });
-  if (!list.length) {
-    const li = document.createElement('li'); li.className = 'new';
-    li.textContent = list.length ? `Not on your list: "${norm(v)}" (new payee)` : `"${norm(v)}" is not on your payee list (new payee)`;
-    li.addEventListener('pointerdown', e => { e.preventDefault(); acPicking = true; });
-    li.addEventListener('click', () => { pickPayee(norm(v)); });
-    ul.append(li);
-  }
-  ul.classList.remove('hidden');
-}
-function pickPayee(n) {
-  acPicking = false; acHl = -1;
-  dirty = true; touched.add('payee');
-  setPayee(n);
-  $('payeeSug').classList.add('hidden');
-  $('fPayee').blur();
-}
-$('fPayee').addEventListener('input', () => { acHl = -1; renderPayeeSug(); });
-$('fPayee').addEventListener('focus', () => {
-  renderPayeeSug();
-  setTimeout(() => $('fPayee').scrollIntoView({ block: 'start', behavior: 'smooth' }), 250);   // keep the list above the keyboard
-});
-$('fPayee').addEventListener('blur', () => setTimeout(() => { if (!acPicking) $('payeeSug').classList.add('hidden'); }, 150));
-$('fPayee').addEventListener('keydown', e => {
-  const items = [...$('payeeSug').querySelectorAll('li')];
-  if (!items.length || $('payeeSug').classList.contains('hidden')) return;
-  if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); acHl = (acHl + (e.key === 'ArrowDown' ? 1 : -1) + items.length) % items.length; renderPayeeSug(); }
-  else if (e.key === 'Enter' && acHl >= 0) { e.preventDefault(); items[acHl].click(); }
-  else if (e.key === 'Escape') $('payeeSug').classList.add('hidden');
-});
-$('fMemo').addEventListener('input', () => {
-  dirty = true; current.memo = $('fMemo').value; current.memoManual = !!norm(current.memo);
   if (!current.memoManual) current.memo = current.payee;
 });
+const payeeAC = setupAC($('fPayee'), $('payeeSug'), payeeNames, n => { dirty = true; touched.add('payee'); setPayee(n); }, 'payee', false);
+$('fPayee').addEventListener('change', () => { if (!payeeAC.picking()) setPayee($('fPayee').value); });
+
+/* Customer: type or pick; a new name is added to the list (and sent to the computer on sync) */
+function setCustomer(name) {
+  const n = norm(name);
+  let v = '';
+  if (n) {
+    v = lists.customers.find(c => lc(c) === lc(n)) || n;
+    if (!lists.customers.some(c => lc(c) === lc(v))) { lists.customers.push(v); lists.pending.customers.push(v); saveLists(); }
+  }
+  if (current) current.customer = v;
+  $('fCustomer').value = v;
+}
+const custAC = setupAC($('fCustomer'), $('custSug'), () => lists.customers, n => { dirty = true; setCustomer(n); }, 'customer', true);
+$('fCustomer').addEventListener('input', () => { dirty = true; });
+$('fCustomer').addEventListener('change', () => { if (!custAC.picking()) setCustomer($('fCustomer').value); });
+
+/* Category (list with "Add new") */
 function selectAdd(sel, key, label) {
   sel.addEventListener('change', () => {
     dirty = true;
     if (sel.value !== '__new__') return;
     const name = norm(prompt(`New ${label} name (spelled as in QuickBooks):`) || '');
     if (!name) { sel.value = current[key] || ''; return; }
-    const listKey = key === 'customer' ? 'customers' : 'categories';
+    const listKey = 'categories';
     const existing = lists[listKey].find(n => lc(n) === lc(name));
     const v = existing || name;
     if (!existing) { lists[listKey].push(v); lists.pending[listKey].push(v); saveLists(); }
-    fillSelect(sel, listKey === 'categories' ? lists[listKey].concat([DEFAULT_CATEGORY]) : lists[listKey], v, sel.options[0].textContent, sel.options[sel.options.length - 1].textContent);
+    fillSelect(sel, lists[listKey].concat([DEFAULT_CATEGORY]), v, sel.options[0].textContent, sel.options[sel.options.length - 1].textContent);
   });
 }
-selectAdd($('fCustomer'), 'customer', 'customer');
 selectAdd($('fCategory'), 'category', 'category');
-$('editShare').onclick = () => shareImages([Object.assign({}, current, { date: $('fDate').value || current.date, payee: canonPayee($('fPayee').value) || current.payee, customer: $('fCustomer').value === '__new__' ? '' : $('fCustomer').value, total: parseFloat($('fTotal').value) || current.total })], 'Receipt');
+$('editShare').onclick = () => shareImages([Object.assign({}, current, { date: $('fDate').value || current.date, payee: canonPayee($('fPayee').value) || current.payee, customer: norm($('fCustomer').value), total: parseFloat($('fTotal').value) || current.total })], 'Receipt');
 $('editImg').onclick = () => { $('viewerImg').src = $('editImg').src; $('viewer').classList.remove('hidden'); };
 $('viewerClose').onclick = () => $('viewer').classList.add('hidden');
 
@@ -390,7 +399,7 @@ $('editSave').onclick = async () => {
   if (!t && !confirm('There is no total. Save anyway?')) return;
   Object.assign(current, {
     date: $('fDate').value || todayISO(), total: t ? Math.round(parseFloat(t) * 100) / 100 : null,
-    payee: canonPayee($('fPayee').value), customer: $('fCustomer').value === '__new__' ? '' : $('fCustomer').value,
+    payee: canonPayee($('fPayee').value), customer: (setCustomer($('fCustomer').value), current.customer),
     category: $('fCategory').value === '__new__' ? '' : $('fCategory').value, note: $('fNote').value.trim(),
     updated: Date.now(), synced: false,
   });

@@ -71,11 +71,10 @@
       <div id="ocrStatus" class="ocr hidden"></div>
       <div class="form">
         <label>Date<input type="date" id="fDate"></label>
+        <label>Customer<span class="ac"><input type="text" id="fCustomer" autocomplete="off" autocorrect="off" autocapitalize="words" spellcheck="false" placeholder="Type or pick a customer"><ul class="aclist hidden" id="custSug"></ul></span></label>
         <label>Total<div class="money"><span>$</span><input type="text" id="fTotal" inputmode="decimal" placeholder="0.00"></div></label>
         <label>Payee<span class="ac"><input type="text" id="fPayee" autocomplete="off" autocorrect="off" autocapitalize="words" spellcheck="false" placeholder="(blank)"><ul class="aclist hidden" id="payeeSug"></ul></span></label>
         <div id="storeHint" class="hintline hidden"></div>
-        <label>Memo<input type="text" id="fMemo" autocomplete="off" placeholder="Same as payee"></label>
-        <label>Customer<select id="fCustomer"></select></label>
         <label>Category<select id="fCategory"></select></label>
         <label>Note <span class="opt">(stays with this receipt only)</span><textarea id="fNote" rows="3" placeholder="e.g. tile for upstairs bathroom"></textarea></label>
       </div>

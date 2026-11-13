@@ -871,13 +871,13 @@ $('qbFile').onchange = async e => {
     if (!confirm(`Found ${names.length} payees in "${f.name}" (${add.length} new):\n\n${names.slice(0, 12).join('\n')}${names.length > 12 ? '\n…' : ''}\n\nAdd them to the list?`)) return;
     add.forEach(n => cur.push({ name: n, words: [] }));
     ta.value = payText(cur.sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' })));
-    toast(`Added ${add.length} payees. Click Save lists.`);
+    await saveListsNow(`Added ${add.length} payees and saved ✓`);
   } else {
     const cur = ta.value.split(/\r?\n/).map(norm).filter(Boolean), have = new Set(cur.map(lc));
     const add = names.filter(n => !have.has(lc(n)));
     if (!confirm(`Found ${names.length} customers in "${f.name}" (${add.length} new):\n\n${names.slice(0, 12).join('\n')}${names.length > 12 ? '\n…' : ''}\n\nAdd them to the list?`)) return;
     ta.value = cur.concat(add).sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' })).join('\n');
-    toast(`Added ${add.length} customers. Click Save lists.`);
+    await saveListsNow(`Added ${add.length} customers and saved ✓`);
   }
 };
 $('importFile').onchange = async e => {
@@ -890,9 +890,17 @@ $('importFile').onchange = async e => {
     vl.forEach(v => { const k = lc(v.name); if (!k) return; const p = byName.get(k); if (p) p.words = [...new Set(p.words.concat(v.words || []))]; else { const n = { name: norm(v.name), words: v.words || [] }; cur.push(n); byName.set(k, n); } });
     $('tPay').value = payText(cur.sort((a, b) => a.name.localeCompare(b.name)));
     if (typeof s.useVendorList === 'boolean') $('cNames').checked = s.useVendorList;
-    toast(`Imported ${vl.length} payees. Click Save lists.`);
+    await saveListsNow(`Imported ${vl.length} payees and saved ✓`);
   } catch (err) { alert("That file isn't a KellerKraft Time Saver settings backup."); }
 };
+// imports are saved right away (no need to click Save lists)
+async function saveListsNow(msgText) {
+  const lines = id => $(id).value.split(/\r?\n/).map(norm).filter(Boolean);
+  try {
+    await post('/local/lists', { customers: lines('tCust'), categories: lines('tCat'), payees: parsePayees($('tPay').value), useNames: $('cNames').checked });
+    toast(msgText); sig = ''; await refresh(); convRefresh();
+  } catch (e) { alert('Imported, but could not save: ' + e.message + '\nClick Save lists to try again.'); }
+}
 $('bSaveLists').onclick = async () => {
   const lines = id => $(id).value.split(/\r?\n/).map(norm).filter(Boolean);
   try {
