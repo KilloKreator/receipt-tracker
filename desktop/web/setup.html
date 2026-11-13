@@ -17,10 +17,22 @@ ol{padding-left:22px;margin:6px 0}li{margin:6px 0}
 .path{font-weight:600;background:var(--soft);color:var(--accent);padding:1px 7px;border-radius:6px}
 .big{font-size:22px;font-weight:700;letter-spacing:.5px}
 .muted{color:var(--muted);font-size:14px}
+.warnbox{border:2px solid #e3a008;background:#fff8e1;color:#5c4400}
+@media (prefers-color-scheme:dark){.warnbox{background:#3a2f12;color:#f5d58a}}
 </style></head>
 <body><div class="wrap">
 <h1>Phone setup</h1>
 <div class="sub">KellerKraft Receipts</div>
+<div class="step warnbox" id="notSafari" style="display:none">
+  <h2>⚠️ Please open this page in Safari</h2>
+  <p>You're using another browser (like Chrome). iPhones only allow <b>Safari</b> to install the security certificate in step 1. You only need Safari for this one-time setup. Afterwards KK Receipts runs from its own Home Screen icon.</p>
+  <ol>
+    <li>Tap <b>Copy link</b>.</li>
+    <li>Open <b>Safari</b> (the blue compass icon), tap the address bar, paste and go.</li>
+  </ol>
+  <a class="btn" href="#" id="copyLink">Copy link</a>
+  <div class="muted" id="copied"></div>
+</div>
 <p class="muted">Do these steps once, on the iPhone, in <b>Safari</b>, while on your home Wi-Fi.</p>
 
 <div class="step">
@@ -59,5 +71,15 @@ ol{padding-left:22px;margin:6px 0}li{margin:6px 0}
 <script>
 document.getElementById('addr').textContent = location.hostname;
 document.getElementById('test').href = 'https://' + location.hostname + ':8443/';
+// Chrome, Firefox, Edge etc. on iPhone can't install certificates
+if (/CriOS|FxiOS|EdgiOS|OPiOS|GSA\//.test(navigator.userAgent)) {
+  document.getElementById('notSafari').style.display = 'block';
+  document.getElementById('copyLink').onclick = async e => {
+    e.preventDefault();
+    const url = location.href.split('#')[0];
+    try { await navigator.clipboard.writeText(url); document.getElementById('copied').textContent = '✓ Copied: ' + url; }
+    catch (err) { document.getElementById('copied').textContent = 'Type this into Safari: ' + url; }
+  };
+}
 </script>
 </body></html>
