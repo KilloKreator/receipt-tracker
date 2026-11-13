@@ -234,6 +234,7 @@ td.cust input{width:100%;min-width:150px}
         <div class="row">
           <button class="small" id="btnAll">Select all</button>
           <button class="small" id="btnNone">Select none</button>
+          <button class="small danger" id="btnClearFile" title="Remove the loaded file so you can choose a different one">✕ Clear all</button>
         </div>
       </div>
       <div id="emptyState" class="muted" style="margin-top:12px">Choose a file in step 2 to see its transactions here.</div>
@@ -1217,6 +1218,12 @@ $('addVendors').addEventListener('change',()=>{ S.addVendors=$('addVendors').che
 $('autoCat').addEventListener('change',()=>{ S.autoCat=$('autoCat').checked; saveSettings(); applyCategories(); renderPreview(); });
 $('btnAll').addEventListener('click',()=>{ if(loaded){ loaded.rows.forEach(r=>r.include=true); renderPreview(); }});
 $('btnNone').addEventListener('click',()=>{ if(loaded){ loaded.rows.forEach(r=>r.include=false); renderPreview(); }});
+// Imported the wrong file? Start over (nothing is exported or changed)
+$('btnClearFile').addEventListener('click',()=>{
+  if(!loaded) return;
+  loaded=null; $('fileName').textContent='No file chosen'; msg('fileMsg'); msg('downloadMsg');
+  renderPreview(); $('drop').scrollIntoView({behavior:'smooth', block:'center'});
+});
 
 $('btnDownload').addEventListener('click',()=>{
   const acc = currentAccount(); if(!loaded||!acc) return;
