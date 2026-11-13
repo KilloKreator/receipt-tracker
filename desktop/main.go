@@ -34,7 +34,7 @@ import (
 )
 
 const (
-	appVersion = "0.2.6"
+	appVersion = "0.2.7"
 	httpPort   = 8780 // dashboard + phone setup page
 	httpsPort  = 8443 // phone sync
 	phoneApp   = "https://killokreator.github.io/receipt-tracker/"

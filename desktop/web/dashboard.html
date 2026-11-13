@@ -90,6 +90,12 @@ input[type=checkbox]{width:17px;height:17px;accent-color:var(--accent)}
 .menu{position:absolute;right:0;top:calc(100% + 6px);z-index:40;min-width:250px;background:var(--card);border:1px solid var(--line);border-radius:10px;box-shadow:0 10px 30px rgba(0,0,0,.18);padding:6px;display:flex;flex-direction:column}
 .menu button{border:none;text-align:left;padding:9px 12px;border-radius:7px;background:none}
 .menu button:hover{background:var(--soft)}
+.custgroup{margin-top:12px;border:1px solid var(--line);border-radius:10px;padding:12px;background:var(--bg)}
+.cghead{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-bottom:10px}
+.cghead input{flex:1;min-width:240px;max-width:420px;font-size:15px}
+.fcard.toggle{border-color:var(--accent)}
+.fcard .recent{font-size:12px;margin-left:4px;opacity:.8}
+.cgsep{grid-column:1/-1;font-size:12px;font-weight:600;color:var(--muted);margin:4px 0 -2px}
 .fgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:10px}
 .fcard{display:flex;gap:12px;align-items:center;text-align:left;padding:12px 14px;border:1px solid var(--line);border-radius:10px;background:var(--card);cursor:pointer;font:inherit;color:var(--text)}
 .fcard:hover{border-color:var(--accent);background:var(--soft)}
@@ -148,10 +154,16 @@ tr.picked td{background:var(--soft)}
 
 <div id="tabReceipts">
 <section class="card" id="viewFolders">
-  <h2>📁 Customers <span class="muted">Each customer's receipts and what they owe. Click a folder to open it.</span>
-    <button id="bAddTop" title="Add receipt pictures or PDFs from this computer">⬆ Add receipts…</button>
-    <input type="search" id="custSearch" placeholder="🔍 Find a customer" style="margin-left:auto;font-weight:400;font-size:14px;min-width:220px"></h2>
-  <div class="fgrid" id="folderGrid"></div>
+  <h2>🧾 Receipts <span class="muted">Click a folder to open it.</span>
+    <button id="bAddTop" title="Add receipt pictures or PDFs from this computer" style="margin-left:auto">⬆ Add receipts…</button></h2>
+  <div class="fgrid" id="topGrid"></div>
+  <div class="custgroup" id="custGroup">
+    <div class="cghead">
+      <span class="muted">Customer files</span>
+      <input type="search" id="custSearch" placeholder="🔍 Search for a customer" autocomplete="off">
+    </div>
+    <div class="fgrid" id="folderGrid"></div>
+  </div>
   <p class="muted" style="margin:14px 0 0">All receipts: <b id="grand" style="color:var(--text)"></b> · <span id="grandSub"></span></p>
 </section>
 
@@ -358,32 +370,54 @@ function render() {
 }
 const sumOf = rs => rs.reduce((s, r) => s + (r.total || 0), 0);
 const plural = (n, w) => `${n} ${w}${n === 1 ? '' : 's'}`;
+/* recently opened customer files (kept on this computer) */
+function recentMap() { try { return JSON.parse(localStorage.getItem('kk.recentCust') || '{}'); } catch (e) { return {}; } }
+function touchRecent(name) { const m = recentMap(); m[name] = Date.now(); try { localStorage.setItem('kk.recentCust', JSON.stringify(m)); } catch (e) {} }
+function custOpen() { try { return localStorage.getItem('kk.custOpen') !== '0'; } catch (e) { return true; } }
+function setCustOpen(v) { try { localStorage.setItem('kk.custOpen', v ? '1' : '0'); } catch (e) {} }
 function renderFolders() {
   const m = new Map();
   S.receipts.forEach(r => { const k = r.customer || '(none)'; if (!m.has(k)) m.set(k, []); m.get(k).push(r); });
-  const q = lc($('custSearch').value);
-  const names = [...m.keys()].filter(k => k !== '(none)').sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
-  const g = $('folderGrid'); g.innerHTML = '';
-  const card = (key, icon, name, rs, cls) => {
+  const card = (grid, key, icon, name, rs, cls, extra) => {
     const b = el('button', { class: 'fcard ' + (cls || ''), title: 'Open ' + name },
       el('span', { class: 'fi', text: icon }),
-      el('span', { class: 'fbody' }, el('div', { class: 'fn', text: name }), el('div', { class: 'fm', text: plural(rs.length, 'receipt') })),
+      el('span', { class: 'fbody' }, el('div', { class: 'fn' }, name, extra || null), el('div', { class: 'fm', text: plural(rs.length, 'receipt') })),
       el('span', { class: 'ft', text: money(sumOf(rs)) }));
     b.onclick = () => openCustomer(key);
-    g.append(b);
+    grid.append(b); return b;
   };
-  if (!S.receipts.length) { g.append(el('div', { class: 'empty', text: 'No receipts yet. Scan one with the phone and tap Sync.' })); }
-  else {
-    if (!q) card('(all)', '🗂', 'All receipts', S.receipts, 'all');
-    names.filter(n => !q || lc(n).includes(q)).forEach(n => card(n, '📁', n, m.get(n)));
-    if (m.has('(none)') && (!q || 'no customer yet'.includes(q))) card('(none)', '📂', 'No customer yet', m.get('(none)'), 'none');
-    if (q && !g.children.length) g.append(el('div', { class: 'empty', text: 'No customer folders match.' }));
+  // top row: All receipts · No customer yet · Customer files (open/close)
+  const top = $('topGrid'); top.innerHTML = '';
+  card(top, '(all)', '🗂', 'All receipts', S.receipts, 'all');
+  card(top, '(none)', '📂', 'No customer yet', m.get('(none)') || [], 'none');
+  const names = [...m.keys()].filter(k => k !== '(none)');
+  const open = custOpen() || !!norm($('custSearch').value);
+  const tg = el('button', { class: 'fcard toggle', title: open ? 'Close customer files' : 'Open customer files' },
+    el('span', { class: 'fi', text: open ? '📂' : '📁' }),
+    el('span', { class: 'fbody' }, el('div', { class: 'fn', text: 'Customer files' }), el('div', { class: 'fm', text: plural(names.length, 'customer') })),
+    el('span', { class: 'ft', text: open ? '▾' : '▸' }));
+  tg.onclick = () => { setCustOpen(!custOpen()); if (!custOpen()) $('custSearch').value = ''; renderFolders(); if (custOpen()) $('custSearch').focus(); };
+  top.append(tg);
+  $('custGroup').classList.toggle('hidden', !open);
+  // customer files: recently opened first, then A–Z
+  const g = $('folderGrid'); g.innerHTML = '';
+  if (open) {
+    const q = lc($('custSearch').value), rec = recentMap();
+    const list = names.filter(n => !q || lc(n).includes(q));
+    const recent = list.filter(n => rec[n]).sort((a, b) => rec[b] - rec[a]).slice(0, 8);
+    const rest = list.filter(n => !recent.includes(n)).sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
+    if (recent.length) g.append(el('div', { class: 'cgsep', text: '🕘 Recently opened' }));
+    recent.forEach(n => card(g, n, '📁', n, m.get(n), '', el('span', { class: 'recent', text: '🕘' })));
+    if (recent.length && rest.length) g.append(el('div', { class: 'cgsep', text: 'All customers A–Z' }));
+    rest.forEach(n => card(g, n, '📁', n, m.get(n)));
+    if (!list.length) g.append(el('div', { class: 'empty', text: q ? 'No customer files match.' : 'No customer files yet.' }));
   }
   $('grand').textContent = money(sumOf(S.receipts));
   $('grandSub').textContent = `${plural(S.receipts.length, 'receipt')} · ${plural(S.devices, 'phone')} connected` + (S.lastSync > 0 ? ` · last sync ${new Date(S.lastSync).toLocaleString()}` : '');
 }
-$('custSearch').addEventListener('input', renderFolders);
+$('custSearch').addEventListener('input', () => { if (norm($('custSearch').value) && !custOpen()) setCustOpen(true); renderFolders(); });
 function openCustomer(key) {
+  if (key !== '(all)' && key !== '(none)') touchRecent(key);
   curCust = key; selected.clear(); seenIds = null;
   $('fFrom').value = ''; $('fTo').value = ''; $('fText').value = ''; $('saveMsg').innerHTML = '';
   $('viewFolders').classList.add('hidden'); $('viewCustomer').classList.remove('hidden');
@@ -397,7 +431,9 @@ function filtered() {
   const f = $('fFrom').value, to = $('fTo').value, q = lc($('fText').value);
   return custRows().filter(r => (!f || r.date >= f) && (!to || r.date <= to)
     && (!q || lc([r.payee, r.memo, r.note, r.customer, r.category, r.total == null ? '' : r.total.toFixed(2), r.date].join(' ')).includes(q)))
-    .sort((a, b) => (b.date || '').localeCompare(a.date || '') || b.created - a.created);
+    .sort(curCust === '(all)'
+      ? (a, b) => (b.received || b.created || 0) - (a.received || a.created || 0)          // All receipts: newest added first
+      : (a, b) => (b.date || '').localeCompare(a.date || '') || b.created - a.created);
 }
 function renderCustomer() {
   const all = custRows();
