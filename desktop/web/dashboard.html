@@ -73,11 +73,29 @@ input[type=checkbox]{width:17px;height:17px;accent-color:var(--accent)}
 .ok{color:var(--good);font-weight:600}.bad{color:var(--bad);font-weight:600}
 .toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#222;color:#fff;padding:10px 16px;border-radius:10px;z-index:50}
 .hidden{display:none!important}
+.fgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:10px}
+.fcard{display:flex;gap:12px;align-items:center;text-align:left;padding:12px 14px;border:1px solid var(--line);border-radius:10px;background:var(--card);cursor:pointer;font:inherit;color:var(--text)}
+.fcard:hover{border-color:var(--accent);background:var(--soft)}
+.fcard .fi{font-size:30px;line-height:1}
+.fcard .fn{font-weight:600;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;word-break:break-word}
+.fcard .fm{font-size:13px;color:var(--muted)}
+.fcard .ft{margin-left:auto;font-weight:700;font-variant-numeric:tabular-nums;white-space:nowrap}
+.fcard.none{border-style:dashed}
+.fcard.all{background:var(--bg)}
+.fbody{min-width:0;flex:1}
+.savebar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:8px 10px}
+td.chk{width:40px}
+td.thumb img{width:46px;height:60px}
+tr.picked td{background:var(--soft)}
+
 .maintabs{display:flex;gap:4px;border-bottom:2px solid var(--line);margin:0 0 14px}
 .mtab{border:none;border-radius:8px 8px 0 0;background:none;padding:10px 20px;font-size:16px;font-weight:600;color:var(--muted);margin-bottom:-2px;border-bottom:3px solid transparent}
 .mtab:hover{color:var(--text)}
 .mtab.on{color:var(--accent);border-bottom-color:var(--accent);background:var(--card)}
 #convFrame{width:100%;border:0;display:block;background:var(--bg)}
+.savemsg{margin-top:8px;padding:8px 12px;border-radius:8px;background:var(--soft);color:var(--accent)}
+.savemsg.good{background:var(--good-soft);color:var(--good)}
+.savemsg.bad{background:var(--bad-soft);color:var(--bad)}
 .newflash td{animation:flash 2.5s ease-out}
 @keyframes flash{from{background:var(--good-soft)}to{background:transparent}}
 </style></head>
@@ -104,33 +122,36 @@ input[type=checkbox]{width:17px;height:17px;accent-color:var(--accent)}
 </nav>
 
 <div id="tabReceipts">
-<section class="card">
-  <h2>💵 Owed by customer <span class="muted">Total of all receipts per customer. Click a customer to see their receipts.</span></h2>
-  <div class="owed">
-    <div class="table-wrap"><table>
-      <thead><tr><th>Customer</th><th class="amt">Receipts</th><th class="amt">Total</th></tr></thead>
-      <tbody id="owedBody"></tbody><tfoot id="owedFoot"></tfoot></table></div>
-    <div>
-      <div class="muted">All receipts</div><div class="big" id="grand">$0.00</div>
-      <div class="muted" id="grandSub"></div>
-    </div>
-  </div>
+<section class="card" id="viewFolders">
+  <h2>📁 Customers <span class="muted">Each customer's receipts and what they owe. Click a folder to open it.</span>
+    <input type="search" id="custSearch" placeholder="🔍 Find a customer" style="margin-left:auto;font-weight:400;font-size:14px;min-width:220px"></h2>
+  <div class="fgrid" id="folderGrid"></div>
+  <p class="muted" style="margin:14px 0 0">All receipts: <b id="grand" style="color:var(--text)"></b> · <span id="grandSub"></span></p>
 </section>
 
-<section class="card">
-  <h2>🧾 Receipts</h2>
+<section class="card hidden" id="viewCustomer">
+  <div class="row" style="justify-content:space-between;margin-bottom:12px">
+    <div class="row"><button id="bBack">‹ All customers</button><h2 style="margin:0 0 0 6px" id="custTitle"></h2></div>
+    <div class="big" id="custTotal" style="font-size:22px"></div>
+  </div>
   <div class="row" style="margin-bottom:10px">
-    <select id="fCust"><option value="">All customers</option></select>
     <label class="muted">From <input type="date" id="fFrom"></label>
     <label class="muted">To <input type="date" id="fTo"></label>
-    <input type="search" id="fText" placeholder="🔍 Search payee, note…" style="min-width:220px">
+    <input type="search" id="fText" placeholder="🔍 Search payee, note, amount…" style="min-width:220px">
     <button class="small" id="fClear">Clear</button>
     <span style="flex:1"></span>
     <span class="muted" id="fSum"></span>
-    <button id="bExport">⬇ Export (CSV / Excel)</button>
   </div>
-  <div class="table-wrap"><table>
-    <thead><tr><th></th><th>Date</th><th>Customer</th><th>Payee</th><th>Category</th><th class="amt">Total</th><th>Note</th></tr></thead>
+  <div class="savebar">
+    <button class="small" id="bAll">Select all</button><button class="small" id="bNone">Select none</button>
+    <span id="selSum" class="muted"></span>
+    <span style="flex:1"></span>
+    <label class="check muted"><input type="checkbox" id="cSummary" checked> Include a summary list (opens in Excel)</label>
+    <button class="primary" id="bSaveSel">💾 Save selected to folder…</button>
+  </div>
+  <div id="saveMsg"></div>
+  <div class="table-wrap" style="margin-top:10px"><table>
+    <thead><tr><th style="width:40px"><input type="checkbox" id="cHead" aria-label="Select all"></th><th></th><th>Date</th><th>Payee</th><th>Category</th><th class="amt">Total</th><th>Note</th></tr></thead>
     <tbody id="rBody"></tbody></table></div>
 </section>
 <p class="muted" style="text-align:center" id="foot"></p>
@@ -278,73 +299,156 @@ function status() {
   else if (!window.netBad) { st.textContent = `📶 Ready for phone sync · ${S.ips[0]}`; st.className = 'pill'; }
   if ($('dSetup').open) fillSetup();
 }
+let curCust = null;            // null = folder view, '(all)', '(none)' or a customer name
+const selected = new Set();
 function render() {
   const fill = (id, arr) => { const d = $(id); d.innerHTML = ''; arr.forEach(v => d.append(el('option', { value: v }))); };
   fill('payeeList', S.payees.map(p => p.name)); fill('custList', S.customers); fill('catList', S.categories);
-  // customer filter
-  const fc = $('fCust'), keep = fc.value; fc.innerHTML = '';
-  fc.append(el('option', { value: '', text: 'All customers' }), el('option', { value: '(none)', text: '(No customer)' }));
-  const custs = [...new Set(S.customers.concat(S.receipts.map(r => r.customer).filter(Boolean)))].sort((a, b) => a.localeCompare(b));
-  custs.forEach(c => fc.append(el('option', { value: c, text: c })));
-  fc.value = [...fc.options].some(o => o.value === keep) ? keep : '';
-  renderOwed(); renderList();
-  $('foot').textContent = `KellerKraft Receipts ${S.version} · Receipts are saved in ${S.dataDir}`;
+  renderFolders();
+  if (curCust !== null) renderCustomer();
+  $('foot').textContent = `KellerKraft Time Saver ${S.version} · Saved in ${S.dataDir}`;
 }
-function renderOwed() {
+const sumOf = rs => rs.reduce((s, r) => s + (r.total || 0), 0);
+const plural = (n, w) => `${n} ${w}${n === 1 ? '' : 's'}`;
+function renderFolders() {
   const m = new Map();
-  S.receipts.forEach(r => { const k = r.customer || '(none)'; const o = m.get(k) || { n: 0, t: 0 }; o.n++; o.t += r.total || 0; m.set(k, o); });
-  const rows = [...m.entries()].sort((a, b) => (a[0] === '(none)') - (b[0] === '(none)') || b[1].t - a[1].t);
-  const tb = $('owedBody'); tb.innerHTML = '';
-  if (!rows.length) tb.append(el('tr', null, el('td', { colspan: 3, class: 'empty', text: 'No receipts yet. Scan one with the phone and tap Sync.' })));
-  let n = 0, t = 0;
-  rows.forEach(([c, o]) => {
-    n += o.n; t += o.t;
-    const tr = el('tr', { class: 'click' + ($('fCust').value === c ? ' sel' : '') },
-      el('td', null, c === '(none)' ? el('span', { class: 'tag none', text: 'No customer yet' }) : c),
-      el('td', { class: 'amt', text: String(o.n) }), el('td', { class: 'amt', text: money(o.t) }));
-    tr.onclick = () => { $('fCust').value = $('fCust').value === c ? '' : c; renderOwed(); renderList(); };
-    tb.append(tr);
-  });
-  $('owedFoot').innerHTML = '';
-  if (rows.length) $('owedFoot').append(el('tr', null, el('td', { text: 'All customers' }), el('td', { class: 'amt', text: String(n) }), el('td', { class: 'amt', text: money(t) })));
-  $('grand').textContent = money(t);
-  $('grandSub').textContent = `${n} receipt${n === 1 ? '' : 's'} · ${S.devices} phone${S.devices === 1 ? '' : 's'} connected` + (S.lastSync > 0 ? ` · last sync ${new Date(S.lastSync).toLocaleString()}` : '');
+  S.receipts.forEach(r => { const k = r.customer || '(none)'; if (!m.has(k)) m.set(k, []); m.get(k).push(r); });
+  const q = lc($('custSearch').value);
+  const names = [...m.keys()].filter(k => k !== '(none)').sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
+  const g = $('folderGrid'); g.innerHTML = '';
+  const card = (key, icon, name, rs, cls) => {
+    const b = el('button', { class: 'fcard ' + (cls || ''), title: 'Open ' + name },
+      el('span', { class: 'fi', text: icon }),
+      el('span', { class: 'fbody' }, el('div', { class: 'fn', text: name }), el('div', { class: 'fm', text: plural(rs.length, 'receipt') })),
+      el('span', { class: 'ft', text: money(sumOf(rs)) }));
+    b.onclick = () => openCustomer(key);
+    g.append(b);
+  };
+  if (!S.receipts.length) { g.append(el('div', { class: 'empty', text: 'No receipts yet. Scan one with the phone and tap Sync.' })); }
+  else {
+    if (!q) card('(all)', '🗂', 'All receipts', S.receipts, 'all');
+    names.filter(n => !q || lc(n).includes(q)).forEach(n => card(n, '📁', n, m.get(n)));
+    if (m.has('(none)') && (!q || 'no customer yet'.includes(q))) card('(none)', '📂', 'No customer yet', m.get('(none)'), 'none');
+    if (q && !g.children.length) g.append(el('div', { class: 'empty', text: 'No customer folders match.' }));
+  }
+  $('grand').textContent = money(sumOf(S.receipts));
+  $('grandSub').textContent = `${plural(S.receipts.length, 'receipt')} · ${plural(S.devices, 'phone')} connected` + (S.lastSync > 0 ? ` · last sync ${new Date(S.lastSync).toLocaleString()}` : '');
+}
+$('custSearch').addEventListener('input', renderFolders);
+function openCustomer(key) {
+  curCust = key; selected.clear(); seenIds = null;
+  $('fFrom').value = ''; $('fTo').value = ''; $('fText').value = ''; $('saveMsg').innerHTML = '';
+  $('viewFolders').classList.add('hidden'); $('viewCustomer').classList.remove('hidden');
+  renderCustomer(); window.scrollTo(0, 0);
+}
+$('bBack').onclick = () => { curCust = null; $('viewCustomer').classList.add('hidden'); $('viewFolders').classList.remove('hidden'); renderFolders(); };
+function custRows() {
+  return S.receipts.filter(r => curCust === '(all)' || (curCust === '(none)' ? !r.customer : r.customer === curCust));
 }
 function filtered() {
-  const c = $('fCust').value, f = $('fFrom').value, to = $('fTo').value, q = lc($('fText').value);
-  return S.receipts.filter(r => (!c || (c === '(none)' ? !r.customer : r.customer === c)) && (!f || r.date >= f) && (!to || r.date <= to)
-    && (!q || lc([r.payee, r.memo, r.note, r.customer, r.category, r.total].join(' ')).includes(q)))
+  const f = $('fFrom').value, to = $('fTo').value, q = lc($('fText').value);
+  return custRows().filter(r => (!f || r.date >= f) && (!to || r.date <= to)
+    && (!q || lc([r.payee, r.memo, r.note, r.customer, r.category, r.total == null ? '' : r.total.toFixed(2), r.date].join(' ')).includes(q)))
     .sort((a, b) => (b.date || '').localeCompare(a.date || '') || b.created - a.created);
 }
-function renderList() {
-  const rs = filtered(), tb = $('rBody'); tb.innerHTML = '';
-  if (!rs.length) tb.append(el('tr', null, el('td', { colspan: 7, class: 'empty', text: S.receipts.length ? 'No receipts match.' : 'No receipts yet.' })));
+function renderCustomer() {
+  const all = custRows();
+  if (curCust !== '(all)' && curCust !== '(none)' && !all.length) { $('bBack').click(); return; }
+  $('custTitle').textContent = (curCust === '(all)' ? '🗂 All receipts' : curCust === '(none)' ? '📂 No customer yet' : '📁 ' + curCust);
+  $('custTotal').textContent = money(sumOf(all));
   const ids = new Set(S.receipts.map(r => r.id));
+  [...selected].forEach(id => { if (!ids.has(id)) selected.delete(id); });
+  const rs = filtered(), tb = $('rBody'); tb.innerHTML = '';
+  if (!rs.length) tb.append(el('tr', null, el('td', { colspan: 7, class: 'empty', text: all.length ? 'No receipts match.' : 'No receipts.' })));
   rs.forEach(r => {
     const isNew = seenIds && !seenIds.has(r.id);
-    const tr = el('tr', { class: 'click' + (isNew ? ' newflash' : '') },
+    const cb = el('input', { type: 'checkbox', 'aria-label': 'Select' }); cb.checked = selected.has(r.id);
+    const tr = el('tr', { class: 'click' + (isNew ? ' newflash' : '') + (cb.checked ? ' picked' : '') },
+      el('td', { class: 'chk' }, cb),
       el('td', { class: 'thumb' }, r.hasImage ? el('img', { src: `/img/${r.id}.jpg?v=${r.received}`, alt: '', loading: 'lazy' }) : ''),
       el('td', { text: fmtDate(r.date), style: 'white-space:nowrap' }),
-      el('td', null, r.customer || el('span', { class: 'tag none', text: 'No customer' })),
-      el('td', { text: r.payee || r.memo || '' }), el('td', { text: r.category || '' }),
+      el('td', null, r.payee || r.memo || '', curCust === '(all)' && r.customer ? el('div', { class: 'muted', text: r.customer }) : null),
+      el('td', { text: r.category || '' }),
       el('td', { class: 'amt', text: money(r.total) }), el('td', { class: 'muted', text: r.note || '' }));
+    cb.addEventListener('click', e => e.stopPropagation());
+    cb.addEventListener('change', () => { if (cb.checked) selected.add(r.id); else selected.delete(r.id); tr.classList.toggle('picked', cb.checked); selSum(); });
+    tr.querySelector('td.chk').addEventListener('click', e => { if (e.target === cb) return; e.stopPropagation(); cb.click(); });
     tr.onclick = () => openRec(r);
     tb.append(tr);
   });
   seenIds = ids;
-  const sum = rs.reduce((s, r) => s + (r.total || 0), 0);
-  $('fSum').textContent = `${rs.length} shown · ${money(sum)}`;
+  $('fSum').textContent = `${rs.length} shown · ${money(sumOf(rs))}`;
+  selSum();
 }
-['fCust', 'fFrom', 'fTo', 'fText'].forEach(id => $(id).addEventListener('input', () => { renderOwed(); renderList(); }));
-$('fClear').onclick = () => { $('fCust').value = ''; $('fFrom').value = ''; $('fTo').value = ''; $('fText').value = ''; renderOwed(); renderList(); };
-$('bExport').onclick = () => {
-  const rs = filtered();
+function selSum() {
+  const rs = filtered(), pick = S.receipts.filter(r => selected.has(r.id));
+  $('selSum').textContent = pick.length ? `${plural(pick.length, 'receipt')} selected · ${money(sumOf(pick))}` : 'Tick the receipts you want to save.';
+  $('bSaveSel').disabled = !pick.length;
+  const vis = rs.filter(r => selected.has(r.id)).length;
+  $('cHead').checked = rs.length > 0 && vis === rs.length; $('cHead').indeterminate = vis > 0 && vis < rs.length;
+}
+['fFrom', 'fTo', 'fText'].forEach(id => $(id).addEventListener('input', renderCustomer));
+$('fClear').onclick = () => { $('fFrom').value = ''; $('fTo').value = ''; $('fText').value = ''; renderCustomer(); };
+$('bAll').onclick = () => { filtered().forEach(r => selected.add(r.id)); renderCustomer(); };
+$('bNone').onclick = () => { selected.clear(); renderCustomer(); };
+$('cHead').onchange = () => { if ($('cHead').checked) $('bAll').click(); else { filtered().forEach(r => selected.delete(r.id)); renderCustomer(); } };
+
+/* save the ticked receipts (scans + summary list) into a folder the user picks */
+const safeName = s => String(s || '').replace(/[\\/:*?"<>|]+/g, ' ').replace(/\s+/g, ' ').trim();
+function imageName(r) {
+  return [r.date, safeName(r.payee || r.memo) || 'receipt', r.total == null ? '' : r.total.toFixed(2), curCust === '(all)' ? safeName(r.customer) : '']
+    .filter(Boolean).join(' ').slice(0, 120) + '.jpg';
+}
+async function uniqueFile(dir, name) {
+  const dot = name.lastIndexOf('.'), base = name.slice(0, dot), ext = name.slice(dot);
+  let n = name, k = 2;
+  for (;;) { try { await dir.getFileHandle(n); n = `${base} (${k++})${ext}`; } catch (e) { if (e.name === 'NotFoundError') return n; throw e; } }
+}
+async function writeFile(dir, name, blob) {
+  const fh = await dir.getFileHandle(await uniqueFile(dir, name), { create: true });
+  const w = await fh.createWritable(); await w.write(blob); await w.close(); return fh.name;
+}
+function summaryCSV(rs) {
   const q = v => '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"';
-  const lines = [['Date', 'Customer', 'Payee', 'Category', 'Total', 'Memo', 'Note'].map(q).join(',')]
-    .concat(rs.map(r => [r.date, r.customer, r.payee, r.category, r.total == null ? '' : r.total.toFixed(2), r.memo, r.note].map(q).join(',')));
-  const a = el('a', { href: URL.createObjectURL(new Blob(['﻿' + lines.join('\r\n')], { type: 'text/csv' })), download: 'receipts.csv' });
-  document.body.append(a); a.click(); a.remove();
+  const lines = [['Date', 'Customer', 'Payee', 'Category', 'Total', 'Memo', 'Note', 'Scan file'].map(q).join(',')];
+  rs.forEach(r => lines.push([r.date, r.customer, r.payee, r.category, r.total == null ? '' : r.total.toFixed(2), r.memo, r.note, r._file || ''].map(q).join(',')));
+  lines.push(['', '', '', 'TOTAL', sumOf(rs).toFixed(2), '', '', ''].map(q).join(','));
+  return new Blob(['﻿' + lines.join('\r\n')], { type: 'text/csv' });
+}
+$('bSaveSel').onclick = async () => {
+  const rs = S.receipts.filter(r => selected.has(r.id)).sort((a, b) => (a.date || '').localeCompare(b.date || ''));
+  if (!rs.length) return;
+  const label = curCust === '(all)' ? 'All customers' : curCust === '(none)' ? 'No customer' : curCust;
+  const today = new Date().toISOString().slice(0, 10);
+  if (!window.showDirectoryPicker) {   // older browsers: download instead
+    for (const r of rs) if (r.hasImage) { const a = el('a', { href: `/img/${r.id}.jpg`, download: imageName(r) }); document.body.append(a); a.click(); a.remove(); }
+    if ($('cSummary').checked) { const a = el('a', { href: URL.createObjectURL(summaryCSV(rs)), download: `${safeName(label)} receipts ${today}.csv` }); document.body.append(a); a.click(); a.remove(); }
+    msgSave('good', `Downloaded ${plural(rs.length, 'receipt')} to your Downloads folder. (Use Edge or Chrome to pick a folder.)`);
+    return;
+  }
+  let dir;
+  try { dir = await window.showDirectoryPicker({ id: 'kk-save-receipts', mode: 'readwrite', startIn: 'documents' }); }
+  catch (e) { if (e.name !== 'AbortError') msgSave('bad', "Couldn't open that folder: " + e.message); return; }
+  $('bSaveSel').disabled = true;
+  try {
+    let n = 0;
+    for (const r of rs) {
+      msgSave('', `Saving ${n + 1} of ${rs.length}…`);
+      r._file = '';
+      if (r.hasImage) { const b = await (await fetch(`/img/${r.id}.jpg`)).blob(); r._file = await writeFile(dir, imageName(r), b); }
+      n++;
+    }
+    let extra = '';
+    if ($('cSummary').checked) extra = ' and the summary list "' + await writeFile(dir, `${safeName(label)} receipts ${today}.csv`, summaryCSV(rs)) + '"';
+    msgSave('good', `✓ Saved ${plural(n, 'receipt')} (${money(sumOf(rs))})${extra} to the folder "${dir.name}".`);
+    toast('Saved ✓');
+  } catch (e) { msgSave('bad', 'Saving stopped: ' + e.message); }
+  finally { rs.forEach(r => delete r._file); selSum(); }
 };
+function msgSave(kind, text) {
+  const m = $('saveMsg'); m.innerHTML = '';
+  if (text) m.append(el('div', { class: 'savemsg ' + kind, text }));
+}
 
 /* receipt dialog */
 function openRec(r) {
