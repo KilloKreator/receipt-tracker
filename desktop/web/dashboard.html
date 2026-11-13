@@ -74,6 +74,15 @@ input[type=checkbox]{width:17px;height:17px;accent-color:var(--accent)}
 .ok{color:var(--good);font-weight:600}.bad{color:var(--bad);font-weight:600}
 .toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#222;color:#fff;padding:10px 16px;border-radius:10px;z-index:50}
 .hidden{display:none!important}
+.fcard .fof{font-size:11px;font-weight:400;color:var(--muted);text-align:right}
+.tobill{font-size:14px;font-weight:600;color:var(--muted)}
+.billsub{font-size:12px;font-weight:400;color:var(--muted);text-align:right}
+th.billcol,td.billcell{text-align:center;width:64px}
+.billlbl{display:inline-flex;align-items:center;gap:4px;cursor:pointer;padding:4px 6px;border-radius:6px}
+.billlbl span{color:var(--good);font-weight:700;visibility:hidden}
+.billlbl input:checked+span{visibility:visible}
+tr.billed td:not(.billcell):not(.chk){opacity:.5}
+tr.billed td.amt{text-decoration:line-through}
 .addcard{display:grid;grid-template-columns:120px 1fr auto;gap:14px;border:1px solid var(--line);border-radius:10px;padding:12px;margin-bottom:10px;align-items:start}
 .addcard img{width:120px;max-height:170px;object-fit:contain;background:#fff;border:1px solid var(--line);border-radius:6px}
 .addcard .ag{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:8px 12px}
@@ -164,7 +173,7 @@ tr.picked td{background:var(--soft)}
     </div>
     <div class="fgrid" id="folderGrid"></div>
   </div>
-  <p class="muted" style="margin:14px 0 0">All receipts: <b id="grand" style="color:var(--text)"></b> · <span id="grandSub"></span></p>
+  <p class="muted" style="margin:14px 0 0">Folder amounts are what's <b>still to bill</b> (receipts not ticked ✓ Billed). All receipts: <b id="grand" style="color:var(--text)"></b> · <span id="grandSub"></span></p>
 </section>
 
 <section class="card hidden" id="viewCustomer">
@@ -178,11 +187,12 @@ tr.picked td{background:var(--soft)}
     <label class="muted">To <input type="date" id="fTo"></label>
     <input type="search" id="fText" placeholder="🔍 Search payee, note, amount…" style="min-width:220px">
     <button class="small" id="fClear">Clear</button>
+    <label class="check muted"><input type="checkbox" id="fHideBilled"> Hide billed</label>
     <span style="flex:1"></span>
     <span class="muted" id="fSum"></span>
   </div>
   <div class="savebar">
-    <button class="small" id="bAll" title="Ticks every receipt shown that isn't in a PDF yet">Select all</button><button class="small" id="bNone">Select none</button>
+    <button class="small" id="bAll" title="Ticks every receipt shown that isn't billed or in a PDF yet">Select all</button><button class="small" id="bNone">Select none</button>
     <span id="selSum" class="muted"></span>
     <span style="flex:1"></span>
     <label class="muted">Receipts per page <select id="perPage"><option value="1">1</option><option value="2" selected>2</option><option value="4">4</option><option value="6">6</option></select></label>
@@ -193,7 +203,7 @@ tr.picked td{background:var(--soft)}
   </div>
   <div id="saveMsg"></div>
   <div class="table-wrap" style="margin-top:10px"><table>
-    <thead><tr><th style="width:40px"><input type="checkbox" id="cHead" aria-label="Select all"></th><th></th><th>Date</th><th>Payee</th><th id="colMid">Category</th><th>Note</th><th class="amt">Total</th></tr></thead>
+    <thead><tr><th style="width:40px"><input type="checkbox" id="cHead" aria-label="Select all"></th><th></th><th>Date</th><th>Payee</th><th id="colMid">Category</th><th>Note</th><th class="amt">Total</th><th class="billcol" title="Tick when this receipt has been billed to the customer">Billed</th></tr></thead>
     <tbody id="rBody"></tbody></table></div>
 </section>
 <p class="muted" style="text-align:center" id="foot"></p>
@@ -369,6 +379,8 @@ function render() {
   $('foot').textContent = `KellerKraft Time Saver ${S.version} · Saved in ${S.dataDir}`;
 }
 const sumOf = rs => rs.reduce((s, r) => s + (r.total || 0), 0);
+const toBill = rs => rs.filter(r => !r.billedAt);
+const billSum = rs => sumOf(toBill(rs));
 const plural = (n, w) => `${n} ${w}${n === 1 ? '' : 's'}`;
 /* recently opened customer files (kept on this computer) */
 function recentMap() { try { return JSON.parse(localStorage.getItem('kk.recentCust') || '{}'); } catch (e) { return {}; } }
@@ -382,7 +394,8 @@ function renderFolders() {
     const b = el('button', { class: 'fcard ' + (cls || ''), title: 'Open ' + name },
       el('span', { class: 'fi', text: icon }),
       el('span', { class: 'fbody' }, el('div', { class: 'fn' }, name, extra || null), el('div', { class: 'fm', text: plural(rs.length, 'receipt') })),
-      el('span', { class: 'ft', text: money(sumOf(rs)) }));
+      el('span', { class: 'ft' }, money(billSum(rs)), billSum(rs) !== sumOf(rs) ? el('div', { class: 'fof', text: 'of ' + money(sumOf(rs)) }) : null));
+    b.title = `Open ${name}: ${money(billSum(rs))} to bill (${plural(toBill(rs).length, 'receipt')} not billed)`;
     b.onclick = () => openCustomer(key);
     grid.append(b); return b;
   };
@@ -412,7 +425,7 @@ function renderFolders() {
     rest.forEach(n => card(g, n, '📁', n, m.get(n)));
     if (!list.length) g.append(el('div', { class: 'empty', text: q ? 'No customer files match.' : 'No customer files yet.' }));
   }
-  $('grand').textContent = money(sumOf(S.receipts));
+  $('grand').textContent = `${money(billSum(S.receipts))} to bill (of ${money(sumOf(S.receipts))})`;
   $('grandSub').textContent = `${plural(S.receipts.length, 'receipt')} · ${plural(S.devices, 'phone')} connected` + (S.lastSync > 0 ? ` · last sync ${new Date(S.lastSync).toLocaleString()}` : '');
 }
 $('custSearch').addEventListener('input', () => { if (norm($('custSearch').value) && !custOpen()) setCustOpen(true); renderFolders(); });
@@ -428,8 +441,8 @@ function custRows() {
   return S.receipts.filter(r => curCust === '(all)' || (curCust === '(none)' ? !r.customer : r.customer === curCust));
 }
 function filtered() {
-  const f = $('fFrom').value, to = $('fTo').value, q = lc($('fText').value);
-  return custRows().filter(r => (!f || r.date >= f) && (!to || r.date <= to)
+  const f = $('fFrom').value, to = $('fTo').value, q = lc($('fText').value), hideB = $('fHideBilled').checked;
+  return custRows().filter(r => (!hideB || !r.billedAt) && (!f || r.date >= f) && (!to || r.date <= to)
     && (!q || lc([r.payee, r.memo, r.note, r.customer, r.category, r.total == null ? '' : r.total.toFixed(2), r.date].join(' ')).includes(q)))
     .sort(curCust === '(all)'
       ? (a, b) => (b.received || b.created || 0) - (a.received || a.created || 0)          // All receipts: newest added first
@@ -439,16 +452,20 @@ function renderCustomer() {
   const all = custRows();
   if (curCust !== '(all)' && !all.length) { $('bBack').click(); return; }   // folder is empty now (e.g. everything was moved)
   $('custTitle').textContent = (curCust === '(all)' ? '🗂 All receipts' : curCust === '(none)' ? '📂 No customer yet' : '📁 ' + curCust);
-  $('custTotal').textContent = money(sumOf(all));
+  $('custTotal').innerHTML = '';
+  $('custTotal').append(...[el('span', { text: money(billSum(all)) }), el('span', { class: 'tobill', text: ' to bill' }),
+    billSum(all) !== sumOf(all) ? el('div', { class: 'billsub', text: `${money(sumOf(all) - billSum(all))} billed · ${money(sumOf(all))} total` }) : null].filter(Boolean));
   $('colMid').textContent = curCust === '(all)' ? 'Customer' : 'Category';
   const ids = new Set(S.receipts.map(r => r.id));
   [...selected].forEach(id => { if (!ids.has(id)) selected.delete(id); });
   const rs = filtered(), tb = $('rBody'); tb.innerHTML = '';
-  if (!rs.length) tb.append(el('tr', null, el('td', { colspan: 7, class: 'empty', text: all.length ? 'No receipts match.' : 'No receipts.' })));
+  if (!rs.length) tb.append(el('tr', null, el('td', { colspan: 8, class: 'empty', text: all.length ? 'No receipts match.' : 'No receipts.' })));
   rs.forEach(r => {
     const isNew = seenIds && !seenIds.has(r.id);
     const cb = el('input', { type: 'checkbox', 'aria-label': 'Select' }); cb.checked = selected.has(r.id);
-    const tr = el('tr', { class: 'click' + (isNew ? ' newflash' : '') + (cb.checked ? ' picked' : '') },
+    const bill = el('input', { type: 'checkbox', 'aria-label': 'Billed', title: r.billedAt ? `Billed ${new Date(r.billedAt).toLocaleDateString()}` : 'Tick when billed' });
+    bill.checked = !!r.billedAt;
+    const tr = el('tr', { class: 'click' + (isNew ? ' newflash' : '') + (cb.checked ? ' picked' : '') + (r.billedAt ? ' billed' : '') },
       el('td', { class: 'chk' }, cb),
       el('td', { class: 'thumb' }, r.hasImage ? el('img', { src: `/img/${r.id}.jpg?v=${r.received}`, alt: '', loading: 'lazy' }) : ''),
       el('td', { text: fmtDate(r.date), style: 'white-space:nowrap' }),
@@ -456,7 +473,14 @@ function renderCustomer() {
         r.original === 'pdf' ? el('span', { class: 'tag pc', text: 'PDF', title: 'Added on this computer from a PDF' }) : null,
         r.pdfAt ? el('div', null, el('span', { class: 'tag pdf', text: '📄 In PDF ' + new Date(r.pdfAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }), title: `Put in a PDF on ${new Date(r.pdfAt).toLocaleString()}${r.pdfName ? ': ' + r.pdfName : ''}` })) : null),
       curCust === '(all)' ? el('td', null, r.customer || el('span', { class: 'tag none', text: 'No customer' })) : el('td', { text: r.category || '' }),
-      el('td', { class: 'muted', text: r.note || '' }), el('td', { class: 'amt', text: money(r.total) }));
+      el('td', { class: 'muted', text: r.note || '' }), el('td', { class: 'amt', text: money(r.total) }),
+      el('td', { class: 'billcell' }, el('label', { class: 'billlbl' }, bill, el('span', { text: '✓' }))));
+    bill.addEventListener('click', e => e.stopPropagation());
+    tr.querySelector('td.billcell').addEventListener('click', e => e.stopPropagation());
+    bill.addEventListener('change', async () => {
+      try { await post('/local/billed', { ids: [r.id], billed: bill.checked }); r.billedAt = bill.checked ? Date.now() : 0; sig = ''; await refresh(); }
+      catch (e) { bill.checked = !bill.checked; alert(e.message); }
+    });
     cb.addEventListener('click', e => e.stopPropagation());
     cb.addEventListener('change', () => { if (cb.checked) selected.add(r.id); else selected.delete(r.id); tr.classList.toggle('picked', cb.checked); selSum(); });
     tr.querySelector('td.chk').addEventListener('click', e => { if (e.target === cb) return; e.stopPropagation(); cb.click(); });
@@ -464,7 +488,7 @@ function renderCustomer() {
     tb.append(tr);
   });
   seenIds = ids;
-  $('fSum').textContent = `${rs.length} shown · ${money(sumOf(rs))}`;
+  $('fSum').textContent = `${rs.length} shown · ${money(billSum(rs))} to bill`;
   selSum();
 }
 function selSum() {
@@ -475,11 +499,13 @@ function selSum() {
   $('cHead').checked = rs.length > 0 && vis === rs.length; $('cHead').indeterminate = vis > 0 && vis < rs.length;
 }
 ['fFrom', 'fTo', 'fText'].forEach(id => $(id).addEventListener('input', renderCustomer));
+try { $('fHideBilled').checked = localStorage.getItem('kk.hideBilled') === '1'; } catch (e) {}
+$('fHideBilled').addEventListener('change', () => { try { localStorage.setItem('kk.hideBilled', $('fHideBilled').checked ? '1' : '0'); } catch (e) {} renderCustomer(); });
 $('fClear').onclick = () => { $('fFrom').value = ''; $('fTo').value = ''; $('fText').value = ''; renderCustomer(); };
 $('bAll').onclick = () => {
-  const rs = filtered(), fresh = rs.filter(r => !r.pdfAt);
+  const rs = filtered(), fresh = rs.filter(r => !r.pdfAt && !r.billedAt);
   fresh.forEach(r => selected.add(r.id)); renderCustomer();
-  if (fresh.length < rs.length) toast(`Skipped ${plural(rs.length - fresh.length, 'receipt')} already in a PDF. Tick them yourself if you need them.`);
+  if (fresh.length < rs.length) toast(`Skipped ${plural(rs.length - fresh.length, 'receipt')} already billed or in a PDF. Tick them yourself if you need them.`);
 };
 $('bNone').onclick = () => { selected.clear(); renderCustomer(); };
 $('cHead').onchange = () => { if ($('cHead').checked) $('bAll').click(); else { filtered().forEach(r => selected.delete(r.id)); renderCustomer(); } };
@@ -560,8 +586,8 @@ $('bPDF').onclick = async () => {
     }
     const blob = ReceiptPDF.build({ title: `${label} — Receipts`, receipts: items, perPage: +$('perPage').value });
     let saved = name;
-    if (handle) { const w = await handle.createWritable(); await w.write(blob); await w.close(); saved = handle.name; msgSave('good', `✓ Saved "${handle.name}" (${plural(rs.length, 'receipt')}, ${money(sumOf(rs))}). They're now marked 📄 In PDF.`); }
-    else { const a = el('a', { href: URL.createObjectURL(blob), download: name }); document.body.append(a); a.click(); a.remove(); msgSave('good', `✓ Saved "${name}" to your Downloads folder. They're now marked 📄 In PDF.`); }
+    if (handle) { const w = await handle.createWritable(); await w.write(blob); await w.close(); saved = handle.name; msgSave('good', `✓ Saved "${handle.name}" (${plural(rs.length, 'receipt')}, ${money(sumOf(rs))}). They're now marked 📄 In PDF and ✓ Billed.`); }
+    else { const a = el('a', { href: URL.createObjectURL(blob), download: name }); document.body.append(a); a.click(); a.remove(); msgSave('good', `✓ Saved "${name}" to your Downloads folder. They're now marked 📄 In PDF and ✓ Billed.`); }
     await post('/local/markpdf', { ids: rs.map(r => r.id), name: saved });
     selected.clear(); sig = ''; await refresh();
     toast('PDF ready ✓');

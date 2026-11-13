@@ -34,7 +34,7 @@ import (
 )
 
 const (
-	appVersion = "0.2.9"
+	appVersion = "0.3.0"
 	httpPort   = 8780 // dashboard + phone setup page
 	httpsPort  = 8443 // phone sync
 	phoneApp   = "https://killokreator.github.io/receipt-tracker/"
@@ -294,7 +294,7 @@ func phoneAPI() http.Handler {
 			if !rec.HasImage {
 				rec.HasImage = old.HasImage
 			}
-			rec.PdfAt, rec.PdfName = old.PdfAt, old.PdfName // the phone doesn't know about PDFs
+			rec.PdfAt, rec.PdfName, rec.BilledAt = old.PdfAt, old.PdfName, old.BilledAt // the phone doesn't know about PDFs or billing
 			*old = rec
 		} else {
 			store.data.Receipts = append(store.data.Receipts, &rec)
@@ -655,6 +655,36 @@ func localSite() http.Handler {
 		}
 		writeJSON(w, 200, map[string]bool{"ok": true})
 	}))
+	mux.HandleFunc("/local/billed", local(func(w http.ResponseWriter, r *http.Request) {
+		var in struct {
+			IDs    []string
+			Billed bool
+		}
+		if json.NewDecoder(io.LimitReader(r.Body, 1<<20)).Decode(&in) != nil {
+			jsonErr(w, 400, "bad request")
+			return
+		}
+		store.mu.Lock()
+		defer store.mu.Unlock()
+		now := time.Now().UnixMilli()
+		for _, id := range in.IDs {
+			if rec := store.findReceipt(id); rec != nil {
+				if in.Billed {
+					if rec.BilledAt == 0 {
+						rec.BilledAt = now
+					}
+				} else {
+					rec.BilledAt = 0
+				}
+				rec.Updated = now
+			}
+		}
+		if err := store.save(); err != nil {
+			jsonErr(w, 500, err.Error())
+			return
+		}
+		writeJSON(w, 200, map[string]bool{"ok": true})
+	}))
 	mux.HandleFunc("/local/markpdf", local(func(w http.ResponseWriter, r *http.Request) {
 		var in struct {
 			IDs   []string
@@ -674,6 +704,9 @@ func localSite() http.Handler {
 					rec.PdfAt, rec.PdfName = 0, ""
 				} else {
 					rec.PdfAt, rec.PdfName = now, in.Name
+					if rec.BilledAt == 0 {
+						rec.BilledAt = now // a receipt put in a PDF counts as billed (can be unticked)
+					}
 				}
 				rec.Updated = now
 			}
