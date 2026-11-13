@@ -67,13 +67,12 @@
       <button class="link" id="editSave"><b>Save</b></button>
     </header>
     <div class="scroll">
-      <div class="preview"><img id="editImg" alt="Receipt"></div>
-      <button class="secondary wide" id="editShare">📤 Save image to Photos or Files</button>
+      <div class="preview"><img id="editImg" alt="Receipt"><button class="shareicon" id="editShare" aria-label="Save image to Photos or Files" title="Save image"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="M8 7l4-4 4 4"/><path d="M6 11H5a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-6a2 2 0 0 0-2-2h-1"/></svg></button></div>
       <div id="ocrStatus" class="ocr hidden"></div>
       <div class="form">
         <label>Date<input type="date" id="fDate"></label>
         <label>Total<div class="money"><span>$</span><input type="text" id="fTotal" inputmode="decimal" placeholder="0.00"></div></label>
-        <label>Payee<input type="text" id="fPayee" list="payeeList" autocomplete="off" autocapitalize="words" placeholder="(blank)"></label>
+        <label>Payee<span class="ac"><input type="text" id="fPayee" autocomplete="off" autocorrect="off" autocapitalize="words" spellcheck="false" placeholder="(blank)"><ul class="aclist hidden" id="payeeSug"></ul></span></label>
         <div id="storeHint" class="hintline hidden"></div>
         <label>Memo<input type="text" id="fMemo" autocomplete="off" placeholder="Same as payee"></label>
         <label>Customer<select id="fCustomer"></select></label>

@@ -1,6 +1,6 @@
 /* KellerKraft Receipts — phone app */
 'use strict';
-const VERSION = '0.1.2';
+const VERSION = '0.1.3';
 const DEFAULT_CATEGORY = 'Uncategorized Expenses';
 const $ = id => document.getElementById(id);
 const norm = s => String(s == null ? '' : s).replace(/\s+/g, ' ').trim();
@@ -60,18 +60,26 @@ function itemEl(r) {
   it.onclick = () => openEdit(r, false);
   return it;
 }
-function folderEl(key, cls, icon, title, rs) {
+const SHARE_SVG = '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="M8 7l4-4 4 4"/><path d="M6 11H5a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-6a2 2 0 0 0-2-2h-1"/></svg>';
+function folderEl(key, cls, icon, title, rs, onShare) {
   const d = document.createElement('details'); d.className = 'folder ' + cls; d.open = openFolders.has(key);
   d.addEventListener('toggle', () => { if (d.open) openFolders.add(key); else openFolders.delete(key); });
   const sm = document.createElement('summary');
   const waiting = rs.filter(r => !r.synced).length;
   const ft = document.createElement('div'); ft.className = 'ft';
-  const b = document.createElement('b'); b.textContent = (icon ? icon + ' ' : '') + title;
-  const fs = document.createElement('span'); fs.className = 'fs'; fs.textContent = `${rs.length} receipt${rs.length === 1 ? '' : 's'}`;
+  const b = document.createElement('span'); b.className = 'fn'; b.textContent = (icon ? icon + '\u2009' : '') + title;
+  const fs = document.createElement('span'); fs.className = 'fc'; fs.textContent = '(' + rs.length + ')';
   ft.append(b, fs);
-  if (waiting) { const c = document.createElement('span'); c.className = 'chip wait'; c.style.marginLeft = '6px'; c.textContent = `${waiting} waiting`; fs.after(c); }
+  if (waiting) { const c = document.createElement('span'); c.className = 'chip wait'; c.textContent = `⏳ ${waiting}`; c.title = `${waiting} waiting to sync`; ft.append(c); }
   const amt = document.createElement('div'); amt.className = 'famt'; amt.textContent = money(sumOf(rs));
-  sm.append(ft, amt); d.append(sm);
+  sm.append(ft, amt);
+  if (onShare) {
+    const sb = document.createElement('button'); sb.className = 'iconbtn'; sb.innerHTML = SHARE_SVG;
+    sb.setAttribute('aria-label', 'Save all images in ' + title); sb.title = 'Save all images';
+    sb.addEventListener('click', e => { e.preventDefault(); e.stopPropagation(); onShare(); });
+    sm.append(sb);
+  }
+  d.append(sm);
   return d;
 }
 async function renderHome() {
@@ -103,11 +111,7 @@ async function renderHome() {
     }
     for (const [mk, rs] of months) {
       const [y, m] = mk.split('-').map(Number);
-      const md = folderEl('m' + mk, 'month', '📁', `${MONTHS[m - 1]} ${y}`, rs);
-      const tools = document.createElement('div'); tools.className = 'monthtools';
-      const sb = document.createElement('button'); sb.textContent = `📤 Save all ${rs.length} image${rs.length === 1 ? '' : 's'} from ${MONTHS[m - 1]}`;
-      sb.onclick = () => shareImages(rs, `${MONTHS[m - 1]} ${y} receipts`);
-      tools.append(sb); md.append(tools);
+      const md = folderEl('m' + mk, 'month', '📁', `${MONTHS[m - 1]} ${y}`, rs, () => shareImages(rs, `${MONTHS[m - 1]} ${y} receipts`));
       const weeks = new Map();
       for (const r of rs) { const wk = isoOf(weekStart(r.date)); if (!weeks.has(wk)) weeks.set(wk, []); weeks.get(wk).push(r); }
       for (const [wk, wrs] of weeks) {
@@ -267,6 +271,7 @@ function setPayee(name) {
   current.payee = canonPayee(name); $('fPayee').value = current.payee;
   if (!current.memoManual) { current.memo = current.payee; $('fMemo').value = current.memo; }
   $('storeHint').classList.add('hidden');
+  $('payeeSug').classList.add('hidden');
 }
 function showStoreHint(store) {
   const h = $('storeHint'); h.innerHTML = '';
@@ -297,7 +302,65 @@ $('fPayee').addEventListener('input', () => {
   dirty = true; touched.add('payee'); current.payee = norm($('fPayee').value);
   if (!current.memoManual) { current.memo = current.payee; $('fMemo').value = current.memo; }
 });
-$('fPayee').addEventListener('change', () => setPayee($('fPayee').value));
+$('fPayee').addEventListener('change', () => { if (!acPicking) setPayee($('fPayee').value); });
+
+/* Payee dropdown under the box (iPhone Safari doesn't show a list for typed suggestions) */
+let acPicking = false, acHl = -1;
+function payeeMatches(q) {
+  q = lc(q); if (!q) return [];
+  const starts = [], words = [], contains = [];
+  for (const n of payeeNames()) {
+    const l = lc(n);
+    if (l.startsWith(q)) starts.push(n);
+    else if (l.split(/[^a-z0-9]+/).some(w => w.startsWith(q))) words.push(n);
+    else if (l.includes(q)) contains.push(n);
+  }
+  return starts.concat(words, contains).slice(0, 8);
+}
+function renderPayeeSug() {
+  const ul = $('payeeSug'), v = $('fPayee').value, q = lc(v);
+  const list = payeeMatches(v);
+  ul.innerHTML = '';
+  if (!q || (list.length === 1 && lc(list[0]) === q)) { ul.classList.add('hidden'); return; }
+  list.forEach((n, i) => {
+    const li = document.createElement('li');
+    const k = lc(n).indexOf(q);
+    if (k >= 0) { li.append(n.slice(0, k)); const b = document.createElement('b'); b.textContent = n.slice(k, k + q.length); li.append(b, n.slice(k + q.length)); }
+    else li.textContent = n;
+    if (i === acHl) li.classList.add('hl');
+    li.addEventListener('pointerdown', e => { e.preventDefault(); acPicking = true; });
+    li.addEventListener('click', () => { pickPayee(n); });
+    ul.append(li);
+  });
+  if (!list.length) {
+    const li = document.createElement('li'); li.className = 'new';
+    li.textContent = list.length ? `Not on your list: "${norm(v)}" (new payee)` : `"${norm(v)}" is not on your payee list (new payee)`;
+    li.addEventListener('pointerdown', e => { e.preventDefault(); acPicking = true; });
+    li.addEventListener('click', () => { pickPayee(norm(v)); });
+    ul.append(li);
+  }
+  ul.classList.remove('hidden');
+}
+function pickPayee(n) {
+  acPicking = false; acHl = -1;
+  dirty = true; touched.add('payee');
+  setPayee(n);
+  $('payeeSug').classList.add('hidden');
+  $('fPayee').blur();
+}
+$('fPayee').addEventListener('input', () => { acHl = -1; renderPayeeSug(); });
+$('fPayee').addEventListener('focus', () => {
+  renderPayeeSug();
+  setTimeout(() => $('fPayee').scrollIntoView({ block: 'start', behavior: 'smooth' }), 250);   // keep the list above the keyboard
+});
+$('fPayee').addEventListener('blur', () => setTimeout(() => { if (!acPicking) $('payeeSug').classList.add('hidden'); }, 150));
+$('fPayee').addEventListener('keydown', e => {
+  const items = [...$('payeeSug').querySelectorAll('li')];
+  if (!items.length || $('payeeSug').classList.contains('hidden')) return;
+  if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); acHl = (acHl + (e.key === 'ArrowDown' ? 1 : -1) + items.length) % items.length; renderPayeeSug(); }
+  else if (e.key === 'Enter' && acHl >= 0) { e.preventDefault(); items[acHl].click(); }
+  else if (e.key === 'Escape') $('payeeSug').classList.add('hidden');
+});
 $('fMemo').addEventListener('input', () => {
   dirty = true; current.memo = $('fMemo').value; current.memoManual = !!norm(current.memo);
   if (!current.memoManual) current.memo = current.payee;

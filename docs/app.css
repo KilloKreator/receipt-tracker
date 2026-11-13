@@ -96,20 +96,29 @@ details.card.conn[open] summary::after{transform:rotate(-90deg)}
 details.card.conn[open] summary{margin-bottom:6px}
 .searchbar{padding:6px 12px 2px}
 .searchbar input{display:block;width:100%;margin:0;font:inherit;font-size:17px;color:var(--text);border:1px solid var(--line);border-radius:12px;padding:10px 12px;background:var(--card);-webkit-appearance:none;appearance:none}
-details.folder{margin:8px 0}
-details.folder>summary{list-style:none;cursor:pointer;display:flex;align-items:center;gap:10px;padding:12px 12px;background:var(--card);border-radius:14px}
+details.folder{margin:6px 0}
+details.folder>summary{list-style:none;cursor:pointer;display:flex;align-items:center;gap:6px;padding:9px 8px 9px 10px;background:var(--card);border-radius:12px;font-size:16px;min-height:44px}
 details.folder>summary::-webkit-details-marker{display:none}
-details.folder>summary::before{content:'›';font-size:24px;line-height:1;color:var(--muted);transition:transform .15s;width:12px}
+details.folder>summary::before{content:'›';font-size:20px;line-height:1;color:var(--muted);transition:transform .15s;width:10px;flex:none}
 details.folder[open]>summary::before{transform:rotate(90deg)}
-details.folder .ft{flex:1;min-width:0}
-details.folder .ft b{display:block}
-details.folder .fs{font-size:13px;color:var(--muted)}
-details.folder .famt{font-weight:700;font-variant-numeric:tabular-nums}
-details.month>summary{font-size:17px}
-details.month>summary .ficon{font-size:22px}
-details.week{margin:6px 0 6px 14px}
-details.week>summary{background:transparent;border:1px solid var(--line);padding:9px 12px}
-details.week .item{margin-left:0}
-.monthtools{margin:6px 0 2px 14px}
-.monthtools button{background:none;color:var(--accent);padding:6px 4px;font-size:15px}
+details.folder .ft{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+details.folder .fn{font-weight:600}
+details.folder .fc{color:var(--muted);font-size:13px;margin-left:5px}
+details.folder .chip{margin:0 0 0 6px;vertical-align:1px}
+details.folder .famt{font-weight:600;font-variant-numeric:tabular-nums;font-size:15px}
+details.week{margin:4px 0 4px 14px}
+details.week>summary{background:transparent;border:1px solid var(--line);padding:6px 10px;min-height:38px;font-size:15px}
+details.week .item{margin:6px 0}
+.iconbtn{background:none;border:none;color:var(--accent);padding:4px;margin:-4px -2px -4px 0;display:inline-flex;align-items:center;flex:none;border-radius:8px}
+.iconbtn:active{background:var(--accent-soft)}
+.preview{position:relative}
+.shareicon{position:absolute;top:12px;right:12px;width:40px;height:40px;border-radius:50%;padding:0;display:grid;place-items:center;background:rgba(255,255,255,.92);color:var(--accent);box-shadow:0 1px 6px rgba(0,0,0,.25)}
+.ac{position:relative;display:block}
+.aclist{position:absolute;left:0;right:0;top:100%;z-index:15;margin:4px 0 0;padding:4px 0;list-style:none;background:var(--card);border:1px solid var(--line);border-radius:12px;box-shadow:0 8px 24px rgba(0,0,0,.18);max-height:260px;overflow-y:auto;-webkit-overflow-scrolling:touch}
+.aclist li{padding:11px 14px;font-size:17px;color:var(--text);font-weight:400;border-bottom:1px solid var(--line);cursor:pointer}
+.aclist li:last-child{border-bottom:none}
+.aclist li:active,.aclist li.hl{background:var(--accent-soft)}
+.aclist li b{color:var(--accent)}
+.aclist li.new{color:var(--muted);font-size:15px}
 .results{font-size:14px;color:var(--muted);margin:10px 6px 0}
+#fPayee{scroll-margin-top:12px}
