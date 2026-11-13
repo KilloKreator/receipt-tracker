@@ -1,0 +1,1686 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>KellerKraft Time Saver</title>
+<!-- Bank CSV -> QuickBooks Desktop IIF converter (part of KellerKraft Receipts).
+     Runs 100% offline: it only talks to the KellerKraft Receipts program on this same computer. -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; connect-src 'self'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src data: blob:;">
+<script>if(/[?&]embedded=1/.test(location.search))document.documentElement.classList.add("embedded");</script>
+<style>
+:root{
+  --bg:#f4f6f8; --card:#ffffff; --text:#1d2329; --muted:#5d6873; --line:#dde2e7;
+  --accent:#1f6feb; --accent-text:#ffffff; --accent-soft:#e7f0fd;
+  --good:#1a7f37; --good-soft:#e6f4ea; --warn:#9a6700; --warn-soft:#fff4d6;
+  --bad:#c62828; --bad-soft:#fdecec; --row-off:#f0f2f4; --input:#ffffff;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#15191d; --card:#1e2328; --text:#e6e9ec; --muted:#9aa5b0; --line:#323a42;
+    --accent:#4c8dff; --accent-text:#0b1220; --accent-soft:#1c2a40;
+    --good:#4cc26b; --good-soft:#16301e; --warn:#e3b341; --warn-soft:#3a2f12;
+    --bad:#ff6b6b; --bad-soft:#3a1c1c; --row-off:#191d21; --input:#15191d;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#15191d; --card:#1e2328; --text:#e6e9ec; --muted:#9aa5b0; --line:#323a42;
+  --accent:#4c8dff; --accent-text:#0b1220; --accent-soft:#1c2a40;
+  --good:#4cc26b; --good-soft:#16301e; --warn:#e3b341; --warn-soft:#3a2f12;
+  --bad:#ff6b6b; --bad-soft:#3a1c1c; --row-off:#191d21; --input:#15191d;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font:15px/1.45 "Segoe UI",system-ui,-apple-system,Roboto,Arial,sans-serif}
+.wrap{max-width:1500px;margin:0 auto;padding:20px 16px 60px}
+header{display:flex;flex-wrap:wrap;gap:12px;align-items:flex-start;justify-content:space-between;margin-bottom:16px}
+.brand .sub{font-size:15px;font-weight:600;color:var(--accent);margin-top:2px}
+.brand .quote{font-style:italic;color:var(--muted);font-size:14px;margin-top:4px}
+.tools{display:flex;flex-direction:column;align-items:flex-start;gap:8px}
+.badge-x{border:none;background:none;color:inherit;padding:0 0 0 6px;font-size:12px;line-height:1;cursor:pointer;opacity:.7}
+.badge-x:hover{opacity:1}
+h1{font-size:24px;margin:0;letter-spacing:-.01em}
+.badge{display:inline-flex;align-items:center;gap:6px;font-size:13px;color:var(--good);background:var(--good-soft);padding:4px 10px;border-radius:999px;margin-top:4px}
+.toolbar{display:flex;flex-wrap:wrap;gap:8px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:16px;margin-bottom:14px}
+.step{display:flex;gap:12px;align-items:flex-start}
+.num{flex:none;width:28px;height:28px;border-radius:50%;background:var(--accent);color:var(--accent-text);display:grid;place-items:center;font-weight:700}
+.step-body{flex:1;min-width:0}
+.step h2{font-size:16px;margin:3px 0 10px}
+.row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+button,.btn{font:inherit;border:1px solid var(--line);background:var(--card);color:var(--text);padding:7px 13px;border-radius:7px;cursor:pointer}
+button:hover{border-color:var(--accent)}
+button.primary{background:var(--accent);color:var(--accent-text);border-color:var(--accent);font-weight:600}
+button.primary:disabled{opacity:.45;cursor:not-allowed}
+button.danger{color:var(--bad)}
+button.small{padding:3px 8px;font-size:13px;white-space:nowrap}
+button.link{border:none;background:none;color:var(--accent);padding:0;text-decoration:underline}
+select,input[type=text]{font:inherit;color:var(--text);background:var(--input);border:1px solid var(--line);border-radius:7px;padding:7px 9px;min-width:0}
+select:focus,input:focus,button:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+#accountSelect{min-width:220px;font-weight:600}
+.muted{color:var(--muted);font-size:13px}
+.drop{border:2px dashed var(--line);border-radius:10px;padding:22px;text-align:center;cursor:pointer;transition:.15s}
+.drop.over,.drop:hover{border-color:var(--accent);background:var(--accent-soft)}
+.drop strong{color:var(--accent)}
+.msg{padding:10px 12px;border-radius:8px;margin-top:10px;font-size:14px}
+.msg.bad{background:var(--bad-soft);color:var(--bad)}
+.msg.warn{background:var(--warn-soft);color:var(--warn)}
+.msg.good{background:var(--good-soft);color:var(--good)}
+.hidden{display:none!important}
+label.check{display:inline-flex;gap:8px;align-items:center;cursor:pointer}
+input[type=checkbox],input[type=radio]{width:17px;height:17px;accent-color:var(--accent)}
+.table-wrap{overflow-x:auto;border:1px solid var(--line);border-radius:8px}
+table{border-collapse:collapse;width:100%;font-size:14px}
+th,td{padding:7px 9px;border-bottom:1px solid var(--line);text-align:left;vertical-align:middle}
+th{background:var(--bg);font-weight:600;white-space:nowrap;position:sticky;top:0}
+td.amt{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+td.in{color:var(--good)}
+tr.off td{background:var(--row-off);color:var(--muted)}
+tr.off td input[type=text]{opacity:.6}
+td.desc{min-width:150px;max-width:220px;word-break:break-word}
+td.cat input{width:100%;min-width:165px}
+td.vend input{width:100%;min-width:170px}
+td.memo input{width:100%;min-width:120px}
+.tag{display:inline-block;font-size:12px;padding:1px 7px;border-radius:999px;white-space:nowrap}
+.tag.in{background:var(--good-soft);color:var(--good)}
+.tag.out{background:var(--accent-soft);color:var(--accent)}
+.tag.warn{background:var(--warn-soft);color:var(--warn)}
+.tag.auto{background:var(--accent-soft);color:var(--accent)}
+.summary{display:flex;flex-wrap:wrap;gap:18px;margin:12px 0}
+.stat .k{font-size:12px;color:var(--muted)}
+.stat .v{font-size:18px;font-weight:700;font-variant-numeric:tabular-nums}
+dialog{border:1px solid var(--line);border-radius:12px;background:var(--card);color:var(--text);padding:0;width:min(760px,calc(100vw - 24px));max-height:calc(100vh - 40px)}
+dialog::backdrop{background:rgba(0,0,0,.45)}
+.dlg-head{display:flex;justify-content:space-between;align-items:center;padding:14px 18px;border-bottom:1px solid var(--line);position:sticky;top:0;background:var(--card);z-index:1}
+.dlg-head h3{margin:0;font-size:17px}
+.dlg-body{padding:16px 18px}
+.dlg-foot{display:flex;flex-wrap:wrap;gap:8px;justify-content:space-between;padding:12px 18px;border-top:1px solid var(--line);position:sticky;bottom:0;background:var(--card)}
+.field{margin-bottom:14px}
+.field>label{display:block;font-weight:600;margin-bottom:4px}
+.field input[type=text],.field select{width:100%}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:0 14px}
+@media (max-width:600px){.grid2{grid-template-columns:1fr}}
+details{border:1px solid var(--line);border-radius:8px;padding:10px 12px;margin-bottom:14px}
+summary{cursor:pointer;font-weight:600}
+.rule-form{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;align-items:end;background:var(--bg);padding:12px;border-radius:8px;margin-bottom:14px}
+.rule-form label{font-size:12px;color:var(--muted);display:block;margin-bottom:3px}
+.rule-form input,.rule-form select{width:100%}
+.help h4{margin:16px 0 6px}
+.help ol,.help ul{padding-left:20px;margin:6px 0}
+.help li{margin:4px 0}
+kbd{border:1px solid var(--line);border-radius:4px;padding:0 5px;background:var(--bg);font-size:13px}
+
+dialog.tut{width:min(980px,calc(100vw - 24px));height:min(720px,calc(100vh - 40px))}
+dialog.tut[open]{display:flex;flex-direction:column}
+.tut-wrap{display:flex;flex:1;min-height:0}
+.tut-nav{flex:none;width:220px;border-right:1px solid var(--line);padding:10px;overflow-y:auto;display:flex;flex-direction:column;gap:2px}
+.tut-nav button{text-align:left;border:none;background:none;padding:8px 10px;border-radius:7px}
+.tut-nav button:hover{background:var(--bg)}
+.tut-nav button.on{background:var(--accent-soft);color:var(--accent);font-weight:600}
+.tut-body{flex:1;overflow-y:auto;padding:4px 22px 20px;min-width:0}
+.tut-body section{display:none}
+.tut-body section.on{display:block}
+.tut-body h4{font-size:19px;margin:14px 0 10px}
+.tut-body p{margin:8px 0}
+@media (max-width:700px){
+  .tut-wrap{flex-direction:column}
+  .tut-nav{width:auto;flex-direction:row;flex-wrap:wrap;border-right:none;border-bottom:1px solid var(--line);max-height:132px}
+  .tut-nav button{padding:5px 9px;font-size:13px;border:1px solid var(--line)}
+  .tut-body{padding:4px 16px 16px}
+}
+ol.steps{counter-reset:st;list-style:none;padding-left:0}
+ol.steps>li{counter-increment:st;position:relative;padding:4px 0 8px 38px;margin:0}
+ol.steps>li::before{content:counter(st);position:absolute;left:0;top:2px;width:26px;height:26px;border-radius:50%;background:var(--accent);color:var(--accent-text);display:grid;place-items:center;font-weight:700;font-size:13px}
+.path{display:inline-block;font-weight:600;background:var(--accent-soft);color:var(--accent);padding:1px 8px;border-radius:6px;white-space:normal}
+.ui{display:inline-block;font-weight:600;border:1px solid var(--line);background:var(--bg);padding:0 7px;border-radius:5px}
+.tip{background:var(--bg);border-left:4px solid var(--accent);padding:9px 12px;border-radius:6px;margin:12px 0}
+.tip.warn{border-left-color:var(--warn);background:var(--warn-soft)}
+.example{background:var(--bg);border:1px dashed var(--line);padding:10px 12px;border-radius:8px;margin:8px 0}
+.faq dt{font-weight:700;margin-top:14px}
+.faq dd{margin:4px 0 0 0;color:var(--text)}
+.qref{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:10px 18px;font-size:14px}
+.qref .k{font-size:12px;color:var(--muted);margin-bottom:2px}
+.hlink{font-size:13px;font-weight:400;margin-left:8px}
+.acc-type{display:inline-flex;align-items:center;font-size:13px;font-weight:700;padding:5px 11px;border-radius:999px;white-space:nowrap}
+.acc-type.cc{background:var(--warn-soft);color:var(--warn)}
+.acc-type.bank{background:var(--good-soft);color:var(--good)}
+dialog.rules{width:min(900px,calc(100vw - 24px))}
+h4.sec{font-size:16px;margin:18px 0 8px;display:flex;flex-wrap:wrap;align-items:center;gap:8px}
+h4.sec .count{font-size:13px;font-weight:600;background:var(--accent-soft);color:var(--accent);padding:1px 9px;border-radius:999px}
+.defaults{background:var(--bg);padding:12px;border-radius:8px}
+.tabs{display:flex;gap:4px;padding:10px 18px 0;border-bottom:1px solid var(--line);background:var(--card);flex-wrap:wrap}
+.tab{border:1px solid transparent;border-bottom:none;border-radius:8px 8px 0 0;background:none;padding:9px 16px;font-weight:600;color:var(--muted);margin-bottom:-1px}
+.tab:hover{color:var(--text);border-color:transparent}
+.tab.on{background:var(--card);border-color:var(--line);color:var(--accent);box-shadow:inset 0 3px 0 var(--accent)}
+.pane{display:none}.pane.on{display:block}
+dialog.rules{height:min(760px,calc(100vh - 40px))}
+dialog.rules[open]{display:flex;flex-direction:column}
+dialog.rules .dlg-body{flex:1;overflow-y:auto}
+.vend-form{grid-template-columns:minmax(180px,1fr) minmax(240px,2fr) auto}
+@media (max-width:640px){.vend-form{grid-template-columns:1fr}}
+.chip{display:inline-block;font-size:12px;background:var(--accent-soft);color:var(--accent);padding:1px 8px;border-radius:999px;margin:1px 3px 1px 0}
+.vend-table{max-height:420px;overflow:auto}
+#vendText{width:100%;font:13px/1.45 Consolas,"Courier New",monospace;color:var(--text);background:var(--input);border:1px solid var(--line);border-radius:7px;padding:8px}
+#vendDetails{background:var(--card);margin:6px 0 0}
+tr.editing td{background:var(--accent-soft)}
+.opt{font-size:11px;opacity:.8}
+.sets div{white-space:nowrap}
+.empty-rules{padding:16px!important;text-align:center;color:var(--muted)}
+.embedded .brand,.embedded #offlineNote{display:none!important}
+.embedded header{justify-content:flex-end;margin-bottom:8px}
+.embedded .wrap{padding-top:8px}
+td.cust input{width:100%;min-width:150px}
+.rc{font-size:15px;cursor:help;margin-left:2px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="brand">
+      <h1>KellerKraft Time Saver</h1>
+      <div class="sub">CSV-IIF Converter</div>
+      <div class="quote">“Just looking out for a Pops I love”</div>
+    </div>
+    <div class="tools">
+      <div class="toolbar">
+        <button id="btnBackup" title="Save your accounts and rules to a file">Back up settings</button>
+        <button id="btnRestore" title="Load accounts and rules from a backup file">Load settings</button>
+        <button id="btnHelp" class="primary">📘 Tutorial</button>
+        <input type="file" id="restoreInput" accept=".json,application/json" class="hidden">
+      </div>
+      <div class="badge" id="offlineNote">🔒 Works offline. Your bank files never leave this computer.<button type="button" class="badge-x" id="offlineX" aria-label="Close this reminder" title="Close">✕</button></div>
+    </div>
+  </header>
+
+  <div id="storageWarn" class="msg warn hidden">Settings could not be saved. Is KellerKraft Receipts still running? Use <b>Back up settings</b> to keep a copy.</div>
+
+  <!-- STEP 1 -->
+  <section class="card step">
+    <div class="num">1</div>
+    <div class="step-body">
+      <h2>Choose the account <button class="link hlink" data-help="accounts">What is this?</button></h2>
+      <div class="row">
+        <select id="accountSelect" aria-label="Account"></select>
+        <span class="acc-type" id="accTypeBadge"></span>
+        <button id="btnEditAccount">Edit account</button>
+        <button id="btnAddAccount">+ Add new account</button>
+      </div>
+      <div id="accountInfo" class="muted" style="margin-top:6px"></div>
+    </div>
+  </section>
+
+  <!-- STEP 2 -->
+  <section class="card step">
+    <div class="num">2</div>
+    <div class="step-body">
+      <h2>Choose the bank's CSV file <button class="link hlink" data-help="chase">How do I get this file?</button></h2>
+      <div id="drop" class="drop" tabindex="0" role="button" aria-label="Choose CSV file">
+        <div><strong>Click to choose a file</strong> or drag it here</div>
+        <div class="muted" id="fileName">No file chosen</div>
+      </div>
+      <input type="file" id="csvInput" accept=".csv,text/csv" class="hidden">
+      <div id="fileMsg"></div>
+    </div>
+  </section>
+
+  <!-- STEP 3 -->
+  <section class="card step">
+    <div class="num">3</div>
+    <div class="step-body">
+      <h2>Check the transactions and download <button class="link hlink" data-help="convert">Explain this list</button></h2>
+      <div class="row" style="justify-content:space-between">
+        <div class="row">
+        <button type="button" id="btnRules">⚙ Rules</button>
+        <label class="check"><input type="checkbox" id="autoCat"> <span><b>Auto-categorize</b> using my rules <button type="button" class="link hlink" data-help="cats" style="margin-left:2px">(how rules work)</button> <span class="muted">(off = everything goes to Uncategorized)</span></span></label>
+        </div>
+        <div class="row">
+          <button class="small" id="btnAll">Select all</button>
+          <button class="small" id="btnNone">Select none</button>
+        </div>
+      </div>
+      <div id="emptyState" class="muted" style="margin-top:12px">Choose a file in step 2 to see its transactions here.</div>
+      <div id="previewArea" class="hidden">
+        <div class="summary" id="summary"></div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Include</th><th>Date</th><th>Bank description</th><th>Type</th><th style="text-align:right">Amount</th><th>Category (QuickBooks account)</th><th>Payee</th><th>Customer</th><th>Memo</th><th></th></tr></thead>
+            <tbody id="tbody"></tbody>
+          </table>
+        </div>
+        <div id="catNote" class="msg warn"></div>
+        <div class="row" style="margin-top:14px">
+          <button class="primary" id="btnDownload">⬇ Download IIF file</button>
+          <button id="btnExcel" title="Save the selected transactions as an Excel spreadsheet">📊 Download Excel spreadsheet</button>
+        </div>
+        <label class="check" style="margin-top:10px"><input type="checkbox" id="addVendors"> <span>Add new payees to QuickBooks automatically <span class="muted">(untick if QuickBooks says a name is already used by a customer or other name)</span></span></label>
+        <div class="muted" style="margin-top:6px">IIF file → import into QuickBooks: <b>File → Utilities → Import → IIF Files</b>. Excel spreadsheet → for your own records or review (not for importing).
+        </div>
+        <div id="downloadMsg"></div>
+      </div>
+    </div>
+  </section>
+  <section class="card">
+    <div class="row" style="justify-content:space-between;margin-bottom:10px"><h2 style="font-size:16px;margin:0">📌 Quick reference</h2><button class="link" data-help="start">Open the full tutorial</button></div>
+    <div class="qref">
+      <div><div class="k">1. Back up QuickBooks first</div><span class="path">File → Back Up Company → Create Local Backup</span></div>
+      <div><div class="k">2. Import the IIF file</div><span class="path">File → Utilities → Import → IIF Files</span></div>
+      <div><div class="k">3. If asked, choose</div><span class="ui">Import it for me. I'll fix it later.</span></div>
+      <div><div class="k">4. Check the result</div><span class="path">Lists → Chart of Accounts</span> → double-click the account</div>
+      <div><div class="k">Undo a bad import</div><span class="path">File → Open or Restore Company → Restore a backup copy</span></div>
+      <div><div class="k">Chase download</div>Account → download icon ⬇ → <span class="ui">Spreadsheet (Excel, CSV)</span></div>
+    </div>
+  </section>
+  <p class="muted" style="text-align:center">Made for QuickBooks Desktop. Back up your company file before importing.</p>
+</div>
+
+<datalist id="catList"></datalist>
+<datalist id="custList"></datalist>
+<datalist id="vendList"></datalist>
+<datalist id="hdrList"></datalist>
+
+<!-- ACCOUNT DIALOG -->
+<dialog id="accDlg">
+  <form method="dialog" id="accForm" novalidate>
+    <div class="dlg-head"><h3 id="accTitle">Account</h3><button type="button" class="small" data-close>✕</button></div>
+    <div class="dlg-body">
+      <div class="field">
+        <label for="fName">QuickBooks account name</label>
+        <input type="text" id="fName" placeholder="e.g. Chase Ink">
+        <div class="muted">Type it <b>exactly</b> as it appears in your QuickBooks Chart of Accounts, including capitals. For a sub-account use a colon, e.g. <kbd>Bank:Chase Ink</kbd>.</div>
+      </div>
+      <div class="grid2">
+        <div class="field">
+          <label for="fType">Account type</label>
+          <select id="fType">
+            <optgroup label="Bank accounts">
+              <option value="checking">Checking</option>
+              <option value="savings">Savings</option>
+              <option value="moneymarket">Money Market</option>
+              <option value="cash">Cash / Petty Cash</option>
+            </optgroup>
+            <optgroup label="Credit cards">
+              <option value="ccard">Credit Card</option>
+            </optgroup>
+          </select>
+          <div class="muted" id="typeHint"></div>
+        </div>
+        <div class="field">
+          <label for="fPreset">Bank file format</label>
+          <select id="fPreset">
+            <option value="chase_checking">Chase checking / savings</option>
+            <option value="chase_card">Chase credit card</option>
+            <option value="custom">Other bank (set up columns myself)</option>
+          </select>
+        </div>
+      </div>
+      <div class="grid2">
+        <div class="field">
+          <label for="fUncatOut" id="uncatOutLabel">Category for uncategorized money OUT</label>
+          <input type="text" id="fUncatOut" list="catList">
+        </div>
+        <div class="field">
+          <label for="fUncatIn" id="uncatInLabel">Category for uncategorized money IN</label>
+          <input type="text" id="fUncatIn" list="catList">
+        </div>
+      </div>
+
+      <div class="field">
+        <label class="check"><input type="checkbox" id="fSkipOn"> <span id="skipLabel"></span></label>
+        <div class="muted" id="skipHint" style="margin-left:25px"></div>
+      </div>
+      <details id="colDetails">
+        <summary>Column settings (how to read this bank's file)</summary>
+        <p class="muted">These are filled in for you when you choose a Chase format. For another bank, choose one of its CSV files below and the column names will be listed for you to pick from.</p>
+        <div class="row" style="margin-bottom:12px">
+          <button type="button" id="btnSample">Choose a sample CSV from this bank…</button>
+          <input type="file" id="sampleInput" accept=".csv,text/csv" class="hidden">
+        </div>
+        <div id="sampleMsg" class="muted" style="margin-bottom:10px"></div>
+        <div class="grid2">
+          <div class="field"><label for="fDate">Date column</label><input type="text" id="fDate" list="hdrList"></div>
+          <div class="field"><label for="fDesc">Description column</label><input type="text" id="fDesc" list="hdrList"></div>
+        </div>
+        <div class="field">
+          <label>How does the file show amounts?</label>
+          <label class="check"><input type="radio" name="amtMode" value="single" checked> One amount column</label>&nbsp;&nbsp;
+          <label class="check"><input type="radio" name="amtMode" value="split"> Separate columns for money out and money in</label>
+        </div>
+        <div id="singleBox" class="grid2">
+          <div class="field"><label for="fAmt">Amount column</label><input type="text" id="fAmt" list="hdrList"></div>
+          <div class="field"><label for="fSign">Money OUT is shown as</label>
+            <select id="fSign"><option value="neg">Negative numbers (e.g. -25.00)</option><option value="pos">Positive numbers (e.g. 25.00)</option></select>
+          </div>
+        </div>
+        <div id="splitBox" class="grid2 hidden">
+          <div class="field"><label for="fOut">Money OUT column (debit / withdrawal)</label><input type="text" id="fOut" list="hdrList"></div>
+          <div class="field"><label for="fIn">Money IN column (credit / deposit)</label><input type="text" id="fIn" list="hdrList"></div>
+        </div>
+        <div class="grid2">
+          <div class="field"><label for="fNum">Check number column <span class="muted">(optional)</span></label><input type="text" id="fNum" list="hdrList"></div>
+          <div class="field"><label for="fBankCat">Bank's own category column <span class="muted">(optional, usable in rules)</span></label><input type="text" id="fBankCat" list="hdrList"></div>
+        </div>
+        <div class="grid2">
+          <div class="field"><label for="fSkipCol">Rows to skip: column… <span class="muted">(optional)</span></label><input type="text" id="fSkipCol" list="hdrList" placeholder="e.g. Type"></div>
+          <div class="field"><label for="fSkipText">…contains this text</label><input type="text" id="fSkipText" placeholder="e.g. Payment"></div>
+        </div>
+      </details>
+      <div id="accErr" class="msg bad hidden"></div>
+    </div>
+    <div class="dlg-foot">
+      <div class="row">
+        <button type="button" class="danger" id="btnDeleteAcc">Delete account</button>
+        <button type="button" id="btnClearHist" title="Forget which transactions were already exported">Clear export history</button>
+      </div>
+      <div class="row">
+        <button type="button" data-close>Cancel</button>
+        <button type="button" class="primary" id="btnSaveAcc">Save account</button>
+      </div>
+    </div>
+  </form>
+</dialog>
+
+<!-- RULES DIALOG -->
+<dialog id="rulesDlg" class="rules">
+  <div class="dlg-head"><h3>⚙ Rules</h3><button type="button" class="small" data-close>✕</button></div>
+  <div class="tabs" role="tablist">
+    <button type="button" class="tab" role="tab" data-tab="cat">📂 Category</button>
+    <button type="button" class="tab" role="tab" data-tab="vend">🏪 Payees</button>
+    <button type="button" class="tab" role="tab" data-tab="bank">🏦 Bank</button>
+  </div>
+  <div class="dlg-body">
+
+    <section class="pane" data-pane="cat">
+      <p class="muted" style="margin-top:0">Category rules choose the QuickBooks <b>category</b> for a transaction. Capital letters don't matter. If several rules match, the one <b>higher in the list</b> wins.</p>
+      <h4 class="sec">📋 Your category rules <span class="count" id="ruleCount"></span></h4>
+      <div class="table-wrap">
+        <table><thead><tr><th>#</th><th>When</th><th>Money</th><th>Category</th><th>Account</th><th>Change</th></tr></thead>
+        <tbody id="rulesBody"></tbody></table>
+      </div>
+      <h4 class="sec" id="ruleFormTitle">➕ Add a category rule</h4>
+      <div class="rule-form">
+        <div><label for="rField">If</label>
+          <select id="rField"><option value="desc">Description</option><option value="bankcat">Bank's category</option></select></div>
+        <div><label for="rText">contains</label><input type="text" id="rText" placeholder="e.g. SHELL"></div>
+        <div><label for="rDir">and money is</label>
+          <select id="rDir"><option value="any">In or out</option><option value="out">Out</option><option value="in">In</option></select></div>
+        <div><label for="rCat">then category</label><input type="text" id="rCat" list="catList" placeholder="e.g. Automobile:Fuel"></div>
+        <div><label for="rAcc">for account</label><select id="rAcc"></select></div>
+        <div class="row"><button type="button" class="primary" id="btnRuleSave">Add rule</button><button type="button" id="btnRuleCancel" class="hidden">Cancel</button></div>
+      </div>
+      <div id="ruleErr" class="msg bad hidden"></div>
+    </section>
+
+    <section class="pane" data-pane="vend">
+      <p class="muted" style="margin-top:0">Your QuickBooks payees. When a bank description contains one of a payee's <b>auto-select words</b>, that payee is filled in. Names must be spelled exactly as in QuickBooks.</p>
+      <h4 class="sec" id="vendFormTitle">➕ Add a payee</h4>
+      <div class="rule-form vend-form">
+        <div><label for="vName">Payee name (as in QuickBooks)</label><input type="text" id="vName" list="vendList" placeholder="e.g. Amazon"></div>
+        <div class="wide"><label for="vWords">Auto-select when the bank description contains <span class="opt">(optional; separate several with commas)</span></label><input type="text" id="vWords" placeholder="e.g. AMAZON MKTPL, AMZN"></div>
+        <div class="row"><button type="button" class="primary" id="btnVendSave">Add payee</button><button type="button" id="btnVendCancel" class="hidden">Cancel</button></div>
+      </div>
+      <div id="vendErr" class="msg bad hidden"></div>
+      <div id="vendMsg" class="muted" style="margin-bottom:6px"></div>
+      <label class="check" style="margin:4px 0 6px"><input type="checkbox" id="useVendorList"> <span>Also auto-select a payee when <b>its name</b> appears in the description <span class="muted">(e.g. "LOWES #03444*" → Lowes)</span></span></label>
+      <h4 class="sec">📋 Your payees <span class="count" id="vendCount"></span>
+        <input type="text" id="vendSearch" placeholder="🔍 Search payees" style="margin-left:auto;font-weight:400;font-size:14px;max-width:220px"></h4>
+      <div class="table-wrap vend-table">
+        <table><thead><tr><th>Payee</th><th>Auto-select when the description contains</th><th>Change</th></tr></thead>
+        <tbody id="vendBody"></tbody></table>
+      </div>
+    </section>
+
+    <section class="pane" data-pane="bank">
+      <p class="muted" style="margin-top:0">Settings for each bank or credit card account.</p>
+      <h4 class="sec">🛠 Settings for <select id="defAcc" aria-label="Account" style="font-weight:600"></select></h4>
+      <div class="defaults">
+        <p class="muted" style="margin:0 0 10px">Used when <b>no category rule matches</b>, or when Auto-categorize is off.</p>
+        <div class="grid2">
+          <div class="field"><label for="dOut" id="dOutLabel">No rule matches: money out goes to</label><input type="text" id="dOut" list="catList"></div>
+          <div class="field"><label for="dIn" id="dInLabel">No rule matches: money in goes to</label><input type="text" id="dIn" list="catList"></div>
+        </div>
+        <div class="field" style="margin-bottom:8px"><label class="check"><input type="checkbox" id="dSkipOn"> <span id="dSkipLabel"><b>Skip rows</b></span></label></div>
+        <div class="grid2">
+          <div class="field"><label for="dSkipCol">Skip rows where column…</label><input type="text" id="dSkipCol" placeholder="e.g. Type"></div>
+          <div class="field"><label for="dSkipText">…contains this text</label><input type="text" id="dSkipText" placeholder="e.g. Payment"></div>
+        </div>
+        <div class="row"><button type="button" class="primary" id="btnDefSave">Save settings</button><span id="defMsg" class="muted"></span></div>
+        <div id="defErr" class="msg bad hidden"></div>
+      </div>
+      <p class="muted">To rename an account, change its type or the bank file format, use <b>Edit account</b> in Step 1.</p>
+    </section>
+  </div>
+  <div class="dlg-foot"><span></span><button type="button" class="primary" data-close>Done</button></div>
+</dialog>
+
+<!-- TUTORIAL DIALOG -->
+<dialog id="helpDlg" class="tut">
+  <div class="dlg-head"><h3>📘 Tutorial</h3><button type="button" class="small" data-close>✕</button></div>
+  <div class="tut-wrap">
+    <nav class="tut-nav" id="tutNav" aria-label="Tutorial topics">
+      <button data-topic="start">⭐ Quick start</button>
+      <button data-topic="chase">1. Get the file from Chase</button>
+      <button data-topic="convert">2. Convert the file</button>
+      <button data-topic="qb">3. Import into QuickBooks</button>
+      <button data-topic="accounts">Accounts</button>
+      <button data-topic="cats">Categories &amp; rules</button>
+      <button data-topic="skip">Skipping card payments</button>
+      <button data-topic="dupes">Avoiding duplicates</button>
+      <button data-topic="share">Backup &amp; sharing</button>
+      <button data-topic="trouble">Fixing problems</button>
+      <button data-topic="words">Words to know</button>
+    </nav>
+    <div class="tut-body help">
+
+      <section data-topic="start">
+        <h4>Quick start: the whole job in 5 steps</h4>
+        <ol class="steps">
+          <li><b>Download</b> your transactions from Chase as a CSV file. <a href="#" data-goto="chase">How?</a></li>
+          <li>In this program, <b>pick the account</b> (for example <i>Chase Ink</i>).</li>
+          <li><b>Choose the CSV file</b> you downloaded.</li>
+          <li><b>Look over the list</b>, then click <span class="ui">⬇ Download IIF file</span>. <a href="#" data-goto="convert">More detail</a></li>
+          <li>In QuickBooks, go to <span class="path">File → Utilities → Import → IIF Files</span> and pick the file. <a href="#" data-goto="qb">More detail</a></li>
+        </ol>
+        <div class="tip">💡 <b>Always back up QuickBooks before importing:</b> <span class="path">File → Back Up Company → Create Local Backup</span></div>
+        <div class="tip">🔒 This program never uses the internet. Your bank files stay on your computer.</div>
+      </section>
+
+      <section data-topic="chase">
+        <h4>Get the file from Chase</h4>
+        <ol class="steps">
+          <li>Sign in at <b>chase.com</b>. Use a computer, not the phone app.</li>
+          <li>Click the account you want (for example the Ink card).</li>
+          <li>Above the list of transactions, click the <b>download icon</b> (a small arrow pointing down).</li>
+          <li>For <b>File type</b>, choose <span class="ui">Spreadsheet (Excel, CSV)</span>.</li>
+          <li>Choose the <b>dates</b> you want, for example last month.</li>
+          <li>Click <span class="ui">Download</span>. The file goes into your <b>Downloads</b> folder.</li>
+        </ol>
+        <div class="tip">💡 Don't open the file in Excel and save it again before converting. Excel can change the dates and numbers.</div>
+      </section>
+
+      <section data-topic="convert">
+        <h4>Convert the file</h4>
+        <p><b>Step 1: Choose the account.</b> Pick it from the list. Each account remembers its own settings.</p>
+        <p><b>Step 2: Choose the bank's CSV file.</b> Click the box and pick the file, or drag the file onto the box. If it's the wrong kind of file for that account, a red message tells you why.</p>
+        <p><b>Step 3: Check the list.</b></p>
+        <ul>
+          <li><b>Include box ☑:</b> ticked rows go into QuickBooks. Untick anything you don't want.</li>
+          <li><b>Type:</b> <span class="tag out">Charge</span> / <span class="tag out">Expense</span> is money out. <span class="tag in">Credit</span> / <span class="tag in">Deposit</span> is money in.</li>
+          <li><b>Category:</b> where the money goes in QuickBooks. Click in the box to type or pick a different one.</li>
+          <li><b>Payee:</b> who you paid, e.g. <i>Amazon.com</i>. A rule fills it in, or you can type it. Otherwise it stays blank.</li>
+          <li><b>Customer:</b> filled in automatically when a receipt scanned on the phone has the <b>same amount and the same payee</b> (closest date, within 30 days). A 🧾 shows it came from a receipt; hover over it to see which one. You can type or change it. It goes on the expense line in QuickBooks (the Customer:Job column), so the customer name must match QuickBooks exactly.</li>
+          <li><b>Memo:</b> filled in automatically with the <b>payee's name</b> (e.g. <i>Amazon</i>). When the payee is <b>blank</b>, the memo holds the full bank description (e.g. <i>Amazon.com*5E4250O42</i>) so you can still tell what it was. You can type your own memo on any row.</li>
+          <li><b>+ Rule:</b> makes a rule from that row, so similar transactions get categorized automatically next time.</li>
+          <li><b>Auto-categorize ☑:</b> on means use your rules. Off means everything goes to <i>Uncategorized</i>.</li>
+          <li><span class="ui">⚙ Rules</span> (next to Auto-categorize): category rules, your payee list, and each account's settings.</li>
+          <li><span class="ui">+</span> next to a payee: add that payee, or set the words that auto-select it.</li>
+        </ul>
+        <p>Check the <b>totals</b> above the list against your Chase statement. Then click <span class="ui">⬇ Download IIF file</span>. The file is saved in your <b>Downloads</b> folder with a name like <i>Chase-Ink_2026-11-01_to_2026-11-30.iif</i>.</p>
+        <p><b>Want a spreadsheet too?</b> Click <span class="ui">📊 Download Excel spreadsheet</span> to save the ticked transactions as an Excel file (.xlsx) with totals at the bottom. Use it for your records, to review, or to send to your accountant. It is <b>not</b> for importing into QuickBooks, and it doesn't count as "already exported".</p>
+      </section>
+
+      <section data-topic="qb">
+        <h4>Import into QuickBooks Desktop 2021</h4>
+        <ol class="steps">
+          <li><b>Back up first:</b> <span class="path">File → Back Up Company → Create Local Backup</span></li>
+          <li>Go to <span class="path">File → Utilities → Import → IIF Files</span></li>
+          <li>If QuickBooks asks how to import, choose <span class="ui">Import it for me. I'll fix it later.</span></li>
+          <li>Find your Downloads folder, click the <b>.iif</b> file, and click <span class="ui">Open</span>.</li>
+          <li>Wait for the message saying the import is done, then click <span class="ui">OK</span>.</li>
+          <li><b>Check it:</b> open <span class="path">Lists → Chart of Accounts</span> (or press <kbd>Ctrl</kbd>+<kbd>A</kbd>) and double-click the account, for example <i>Chase Ink</i>. The new transactions are in the register.</li>
+        </ol>
+        <div class="tip">💡 <b>First time?</b> Try a file with only a few transactions to check everything looks right.</div>
+      </section>
+
+      <section data-topic="accounts">
+        <h4>Accounts</h4>
+        <p>An "account" here is a bank account or credit card you bring into QuickBooks.</p>
+        <ul>
+          <li>The program comes with three accounts ready: <b>Chase Ink</b> (credit card), <b>Checking</b> and <b>Savings</b>. If your QuickBooks uses different names (for example <i>Chase Business Checking</i>), click <span class="ui">Edit account</span> and change the name to match. Delete any you don't use.</li>
+          <li><span class="ui">+ Add new account</span> sets up a new one. <span class="ui">Edit account</span> changes the selected one.</li>
+          <li><b>QuickBooks account name:</b> type it <b>exactly</b> as in QuickBooks (<span class="path">Lists → Chart of Accounts</span>), including capital letters.</li>
+          <li><b>Account type:</b>
+            <ul>
+              <li><b>Checking, Savings, Money Market, Cash / Petty Cash</b> are all <b>bank accounts</b> in QuickBooks. Money in becomes a <b>Deposit</b> and money out becomes a <b>Check</b> (expense).</li>
+              <li><b>Credit Card:</b> purchases become a <b>Credit Card Charge</b> and refunds become a <b>Credit Card Credit</b>.</li>
+            </ul></li>
+          <li><b>Bank file format:</b> pick <i>Chase checking / savings</i> or <i>Chase credit card</i>. For any other bank, pick <i>Other bank</i>. Then click <span class="ui">Choose a sample CSV from this bank…</span> and choose which column is the date, the description and the amount.</li>
+          <li><b>Uncategorized categories:</b> where transactions go when no rule matches.</li>
+          <li><span class="ui">Delete account</span> only removes it from this program. QuickBooks is not changed.</li>
+        </ul>
+      </section>
+
+      <section data-topic="cats">
+        <h4>Rules: Category, Payees and Bank</h4>
+        <p>Click <span class="ui">⚙ Rules</span> in Step 3 (next to Auto-categorize). The window has <b>three tabs</b>:</p>
+
+        <p><b>📂 Category tab: which QuickBooks category</b></p>
+        <div class="example">If <b>Description</b> contains <b>"SHELL"</b> → Category <b>Automobile:Fuel</b></div>
+        <ul>
+          <li>Type a short word that's always in the bank description. Capital letters don't matter.</li>
+          <li><b>Money</b> can be In, Out, or In or out. A rule can apply to all accounts or just one.</li>
+          <li>If two rules match, the one <b>higher in the list wins</b>. Use ↑ ↓ to reorder them.</li>
+          <li>Quick way: click <span class="ui">+ Rule</span> next to a transaction.</li>
+        </ul>
+
+        <p><b>🏪 Payees tab: who you paid</b></p>
+        <ul>
+          <li>Your QuickBooks payee list (the master list, filled with 📋 Lists → Import), spelled exactly as in QuickBooks.</li>
+          <li><b>Add a payee:</b> type its name and, optionally, its <b>auto-select words</b>. When a bank description contains one of those words, that payee is filled in. Example: <i>The Home Depot</i> with words <b>HOME DEPOT, HOMEDEPOT</b>.</li>
+          <li>Separate several words with commas. If several payees match, the longest matching word wins.</li>
+          <li><b>Also auto-select a payee when its name appears</b> (ticked): even without words, <i>LOWES #03444*</i> → <b>Lowes</b> and <i>SHELL OIL 57444</i> → <b>Shell</b>.</li>
+          <li>Quick way: click the small <span class="ui">+</span> next to a payee box in the transaction list.</li>
+          <li>Tags in the list: <span class="tag warn">new payee</span> means it isn't on your list and will be <b>created</b> in QuickBooks when you import (only if <b>Add new payees to QuickBooks automatically</b> is ticked).</li>
+          <li>The memo is filled in with the <b>payee's name</b>. When no payee matches, the payee stays <b>blank</b> and the memo holds the full bank description.</li>
+          <li>When you add a payee (vendor) in QuickBooks, add it here too.</li>
+        </ul>
+
+        <p><b>🏦 Bank tab: settings for each account</b></p>
+        <ul>
+          <li>Where transactions go when <b>no category rule matches</b> (e.g. <i>Uncategorized Expenses</i>).</li>
+          <li><b>Skip card payments:</b> on or off, so payments aren't counted twice.</li>
+        </ul>
+        <div class="tip warn">⚠️ Category and payee names must match QuickBooks <b>exactly</b>. A category that doesn't exist can make the import fail.</div>
+      </section>
+
+      <section data-topic="skip">
+        <h4>Skipping card payments</h4>
+        <p>When you pay your credit card bill, the payment is usually already entered in QuickBooks <b>from your checking account</b>. If you import it from the card too, it gets counted <b>twice</b>.</p>
+        <ul>
+          <li>For credit cards, the <b>Skip card payments</b> box is on by default (in <span class="ui">Edit account</span>).</li>
+          <li>Skipped payments still show in the list, <b>unticked</b>, with a <span class="tag warn">Skipped</span> label.</li>
+          <li>To include one anyway, just tick its box.</li>
+        </ul>
+      </section>
+
+      <section data-topic="dupes">
+        <h4>Avoiding duplicates</h4>
+        <p>The program remembers every transaction you've downloaded for each account.</p>
+        <ul>
+          <li>If a later Chase file has dates that overlap, those transactions show as <span class="tag warn">Already exported</span> and are <b>unticked</b>, so only the new ones are imported.</li>
+          <li>If you downloaded an IIF file but <b>never imported it</b> into QuickBooks, tick those rows again.</li>
+          <li>To make it forget everything for an account: <span class="path">Edit account → Clear export history</span></li>
+        </ul>
+        <div class="tip">💡 The program's memory only works on the same computer and browser. If you change computers, use Backup &amp; Load settings.</div>
+      </section>
+
+      <section data-topic="share">
+        <h4>Backup &amp; sharing</h4>
+        <p>Your accounts, rules and export history are saved by the program in <b>Documents\KellerKraft Receipts</b>, together with your receipts. Payees and customers are the <b>master lists</b> shared with the Receipts tab and the phone (📋 Lists at the top).</p>
+        <ul>
+          <li><span class="ui">Back up settings</span> saves everything to a small file. Do this after you add accounts or rules.</li>
+          <li><span class="ui">Load settings</span> brings a backup back, for example on a new computer. It <b>replaces</b> the current accounts and rules.</li>
+        </ul>
+        <p><b>Giving the program to someone else:</b></p>
+        <ol>
+          <li>Right-click this program's file and choose <span class="path">Send to → Compressed (zipped) folder</span> (Windows). Some email services block un-zipped .html files.</li>
+          <li>Email the zip file.</li>
+          <li>They unzip it and double-click the file to open it in Chrome or Edge.</li>
+          <li>Optional: send your settings backup file too, and they click <span class="ui">Load settings</span>.</li>
+        </ol>
+      </section>
+
+      <section data-topic="trouble">
+        <h4>Fixing problems</h4>
+        <dl class="faq">
+          <dt>"This file doesn't match the column settings…"</dt>
+          <dd>You may have picked the wrong account in Step 1, or the bank changed its file. Check the account first. If it's right, go to <span class="path">Edit account → Column settings</span>, click <span class="ui">Choose a sample CSV…</span> and pick the columns again.</dd>
+          <dt>QuickBooks created a new account I didn't want</dt>
+          <dd>A category name didn't match exactly. In <span class="path">Lists → Chart of Accounts</span>, right-click the new account → <span class="ui">Edit Account</span> and rename it to the <b>exact</b> name of the right account. QuickBooks will offer to <b>merge</b> them. Then fix the rule in this program.</dd>
+          <dt>QuickBooks says a name is already in use</dt>
+          <dd>The payee name is already used by a <b>customer</b>, an <b>employee</b> or an <b>other name</b>. QuickBooks doesn't allow the same name twice. Either change the payee in the rule (e.g. <i>Amazon.com - Vendor</i>), or untick <b>Add new payees to QuickBooks automatically</b> to use the existing name.</dd>
+          <dt>I imported the same file twice</dt>
+          <dd>The simplest fix is to restore the backup you made: <span class="path">File → Open or Restore Company → Restore a backup copy</span>. Or delete the extra transactions in the register (right-click → <span class="ui">Delete</span>).</dd>
+          <dt>QuickBooks says it needs single-user mode</dt>
+          <dd>Go to <span class="path">File → Switch to Single-user Mode</span> and import again.</dd>
+          <dt>Nothing downloads when I click Download</dt>
+          <dd>Check your <b>Downloads</b> folder. The browser may also show a bar asking you to keep or allow the file.</dd>
+          <dt>My accounts and rules disappeared</dt>
+          <dd>This can happen after clearing browser data or using a different browser. Click <span class="ui">Load settings</span> and pick your backup file.</dd>
+          <dt>Some rows weren't read</dt>
+          <dd>A yellow message lists which lines and why (for example, a blank date). Check those lines in the CSV file.</dd>
+        </dl>
+      </section>
+
+      <section data-topic="words">
+        <h4>Words to know</h4>
+        <dl class="faq">
+          <dt>CSV file</dt><dd>A simple spreadsheet file. This is what Chase gives you.</dd>
+          <dt>IIF file</dt><dd>A file QuickBooks Desktop can import. This is what the program makes.</dd>
+          <dt>Register</dt><dd>The list of transactions for one account in QuickBooks, like a checkbook.</dd>
+          <dt>Chart of Accounts</dt><dd>QuickBooks' list of all accounts and categories. <span class="path">Lists → Chart of Accounts</span></dd>
+          <dt>Category</dt><dd>The QuickBooks account money is spent on or comes from (e.g. Office Supplies).</dd>
+          <dt>Rule</dt><dd>An instruction that picks a category automatically, based on words in the description.</dd>
+          <dt>Charge / Credit</dt><dd>On a credit card, a purchase / a refund.</dd>
+          <dt>Deposit / Check</dt><dd>In a bank account, money in / money out.</dd>
+        </dl>
+      </section>
+    </div>
+  </div>
+  <div class="dlg-foot"><button type="button" id="tutPrev">← Back</button><div class="row"><button type="button" id="tutNext">Next →</button><button type="button" class="primary" data-close>Close</button></div></div>
+</dialog>
+
+<script>
+window.__startConverter = function(){
+'use strict';
+
+/* ---------------- Settings & storage ---------------- */
+const STORE_KEY = 'bank2iif.settings.v1';
+const PRESETS = {
+  chase_checking: {dateCol:'Posting Date', descCol:'Description', amountMode:'single', amountCol:'Amount', outNegative:true,
+                   outCol:'', inCol:'', numCol:'Check or Slip #', bankCatCol:'', skipCol:'', skipText:'', skipOn:false},
+  chase_card:     {dateCol:'Transaction Date', descCol:'Description', amountMode:'single', amountCol:'Amount', outNegative:true,
+                   outCol:'', inCol:'', numCol:'', bankCatCol:'Category', skipCol:'Type', skipText:'Payment', skipOn:true}
+};
+const PRESET_LABELS = {chase_checking:'Chase checking / savings file', chase_card:'Chase credit card file', custom:'Custom file layout'};
+
+function uid(){ return Math.random().toString(36).slice(2,10) + Date.now().toString(36); }
+
+const SUBTYPES = {checking:'Checking', savings:'Savings', moneymarket:'Money Market', cash:'Cash / Petty Cash', ccard:'Credit Card'};
+function kindOf(sub){ return sub==='ccard' ? 'CCARD' : 'BANK'; }
+function subtypeOf(a){ return SUBTYPES[a.subtype] ? a.subtype : (a.type==='CCARD' ? 'ccard' : 'checking'); }
+// Ready-made bank accounts (QuickBooks' usual names). Rename or delete them if yours differ.
+function standardAccounts(){
+  return [['Chase Checking','checking'],['Savings','savings']].map(([name,sub])=>Object.assign({id:uid(), name, type:'BANK', subtype:sub,
+    preset:'chase_checking', uncatOut:'Uncategorized Expenses', uncatIn:'Uncategorized Income'}, PRESETS.chase_checking));
+}
+function defaultSettings(){
+  const id = uid();
+  return {
+    version:1,
+    accounts:[Object.assign({id, name:'Chase Ink', type:'CCARD', subtype:'ccard', preset:'chase_card',
+      uncatOut:'Uncategorized Expenses', uncatIn:'Uncategorized Expenses'}, PRESETS.chase_card)].concat(standardAccounts()),
+    stdAccountsAdded:true,
+    chaseInkRenamed:true,
+    chaseCheckingRenamed:true,
+    uncatExpFixed:true,
+    rules:[{id:uid(), field:'desc', text:'INTEREST PAYMENT', dir:'in', category:'Interest Income', account:'all'}],
+    exported:{},
+    lastAccountId:id,
+    autoCat:true
+  };
+}
+
+let storageOK = true;
+const KK = window.__KK || {};   // master lists + receipts from KellerKraft Receipts
+function loadSettings(){
+  const s = (KK.settings && validSettings(KK.settings)) ? KK.settings : defaultSettings();
+  s.vendorList = (KK.payees||[]).map(p=>({name:p.name, words:(p.words||[]).slice()}));
+  if(typeof KK.useNames==='boolean') s.useVendorList = KK.useNames;
+  return normalize(s);
+}
+// Saved in the KellerKraft Receipts program. Payees are the shared master list.
+let saveT = null, lastPayees = null;
+function saveSettings(){ clearTimeout(saveT); saveT = setTimeout(pushSettings, 250); }
+async function pushSettings(){
+  const { vendorList, useVendorList, ...rest } = S;
+  const body = { settings: rest, useNames: useVendorList !== false };
+  const pj = JSON.stringify(vendorList||[]);
+  if(pj !== lastPayees) body.payees = vendorList || [];
+  try{
+    const r = await fetch('/local/converter', { method:'POST', headers:{'Content-Type':'application/json','X-KK':'1'}, body: JSON.stringify(body) });
+    if(!r.ok) throw new Error(r.status);
+    lastPayees = pj; storageOK = true;
+  }catch(e){ storageOK = false; }
+  $('storageWarn').classList.toggle('hidden', storageOK);
+}
+function validSettings(s){ return s && typeof s==='object' && Array.isArray(s.accounts) && Array.isArray(s.rules || []); }
+function normalize(s){
+  s.version = 1;
+  s.rules = Array.isArray(s.rules) ? s.rules : [];
+  s.exported = (s.exported && typeof s.exported==='object') ? s.exported : {};
+  s.autoCat = s.autoCat !== false;
+  s.accounts.forEach(a=>{ if(!a.id) a.id = uid(); a.subtype = subtypeOf(a); a.type = kindOf(a.subtype); });
+  // QuickBooks Desktop's built-in account is "Uncategorized Expenses" (with an s)
+  if(!s.uncatExpFixed){
+    const fix = v => v==='Uncategorized Expense' ? 'Uncategorized Expenses' : v;
+    s.accounts.forEach(a=>{ a.uncatOut = fix(a.uncatOut); a.uncatIn = fix(a.uncatIn); });
+    s.rules.forEach(r=>{ r.category = fix(r.category); });
+    s.uncatExpFixed = true;
+  }
+  if(!s.stdAccountsAdded){
+    standardAccounts().forEach(n=>{ if(!s.accounts.some(a=>lc(a.name)===lc(n.name))) s.accounts.push(n); });
+    s.stdAccountsAdded = true;
+  }
+  s.rules.forEach(r=>{ if(!r.id) r.id = uid(); delete r.memo; });
+  // Vendor list: [{name, words:[auto-select words]}]
+  if(!Array.isArray(s.vendorList)){
+    const names = Array.isArray(s.vendors) ? s.vendors : [];
+    s.vendorList = names.map(n=>({name:n, words:[]}));
+  }
+  delete s.vendors;
+  s.vendorList = s.vendorList.filter(v=>v && norm(v.name));
+  s.vendorList.forEach(v=>{ if(!Array.isArray(v.words)) v.words=[]; });
+  const findV = n => s.vendorList.find(v=>lc(v.name)===lc(n));
+  const addWord = (v,w)=>{ w=norm(w); if(w && !v.words.some(x=>lc(x)===lc(w))) v.words.push(w); };
+  // Older versions kept payee rules with the category rules: move them onto their vendor
+  s.rules.forEach(r=>{ if(norm(r.vendor)){ let v=findV(r.vendor); if(!v){ v={name:norm(r.vendor), words:[]}; s.vendorList.push(v); } if(r.field!=='bankcat') addWord(v, r.text); } });
+  s.rules = s.rules.filter(r=>norm(r.category));
+  s.rules.forEach(r=>{ delete r.vendor; });
+  // Always use "The Home Depot" (never "Home Depot") for Home Depot charges
+  if(!s.homeDepotRules){
+    let v=findV('The Home Depot'); if(!v){ v={name:'The Home Depot', words:[]}; s.vendorList.push(v); }
+    addWord(v,'HOME DEPOT'); addWord(v,'HOMEDEPOT');
+    s.homeDepotRules = true;
+  }
+  s.vendorList.sort((a,b)=>a.name.localeCompare(b.name,undefined,{sensitivity:'base'}));
+  if(s.useVendorList===undefined) s.useVendorList = true;
+  return s;
+}
+
+let S = loadSettings();
+lastPayees = JSON.stringify((KK.payees||[]).map(p=>({name:p.name, words:p.words||[]})));
+
+/* ---------------- Helpers ---------------- */
+function $(id){ return document.getElementById(id); }
+function el(tag, props, ...kids){
+  const e = document.createElement(tag);
+  if(props) for(const k in props){
+    if(k==='class') e.className = props[k];
+    else if(k==='text') e.textContent = props[k];
+    else if(k.startsWith('on')) e.addEventListener(k.slice(2), props[k]);
+    else if(k in e && typeof props[k] !== 'string') e[k] = props[k];
+    else e.setAttribute(k, props[k]);
+  }
+  kids.flat().forEach(c=>{ if(c!=null) e.append(c); });
+  return e;
+}
+function norm(s){ return String(s||'').replace(/\s+/g,' ').trim(); }
+function lc(s){ return norm(s).toLowerCase(); }
+function money(n){ return n.toLocaleString('en-US',{style:'currency',currency:'USD'}); }
+function msg(target, kind, text){
+  const box = $(target); box.innerHTML='';
+  if(text){ const m = el('div',{class:'msg '+kind}); if(text instanceof Node) m.append(text); else m.textContent = text; box.append(m); }
+}
+function currentAccount(){ return S.accounts.find(a=>a.id===$('accountSelect').value) || null; }
+function downloadFile(name, text, type){
+  const blob = new Blob([text], {type: type || 'application/octet-stream'});
+  const url = URL.createObjectURL(blob);
+  const a = el('a',{href:url, download:name});
+  document.body.append(a); a.click(); a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url), 2000);
+}
+function readFile(file){
+  return new Promise((res,rej)=>{ const r = new FileReader(); r.onload=()=>res(r.result); r.onerror=()=>rej(r.error); r.readAsText(file); });
+}
+
+/* ---------------- CSV parsing ---------------- */
+function parseCSV(text){
+  text = String(text).replace(/^﻿/,'');
+  const rows=[]; let row=[], f='', q=false;
+  for(let i=0;i<text.length;i++){
+    const c = text[i];
+    if(q){
+      if(c==='"'){ if(text[i+1]==='"'){ f+='"'; i++; } else q=false; }
+      else f+=c;
+    } else if(c==='"') q=true;
+    else if(c===','){ row.push(f); f=''; }
+    else if(c==='\r'){ if(text[i+1]!=='\n'){ row.push(f); rows.push(row); row=[]; f=''; } }
+    else if(c==='\n'){ row.push(f); rows.push(row); row=[]; f=''; }
+    else f+=c;
+  }
+  if(f!=='' || row.length){ row.push(f); rows.push(row); }
+  return rows.filter(r=>r.some(x=>String(x).trim()!==''));
+}
+function colIndex(headers, name){
+  const n = lc(name); if(!n) return -1;
+  return headers.findIndex(h=>lc(h)===n);
+}
+function parseAmount(s){
+  s = String(s==null?'':s).trim();
+  if(!s) return null;
+  const neg = /^\(.*\)$/.test(s) || /-/.test(s) || /\bDR\b/i.test(s);
+  const digits = s.replace(/[^0-9.]/g,'');
+  if(!digits || !/\d/.test(digits)) return null;
+  const v = parseFloat(digits);
+  if(!isFinite(v)) return null;
+  return Math.round((neg?-v:v)*100)/100;
+}
+function parseDate(s){
+  s = norm(s); let y,m,d, mt;
+  if((mt = s.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2}|\d{4})$/))){ m=+mt[1]; d=+mt[2]; y=+mt[3]; if(y<100) y+=2000; }
+  else if((mt = s.match(/^(\d{4})[\/\-.](\d{1,2})[\/\-.](\d{1,2})/))){ y=+mt[1]; m=+mt[2]; d=+mt[3]; }
+  else return null;
+  const dt = new Date(y, m-1, d);
+  if(dt.getFullYear()!==y || dt.getMonth()!==m-1 || dt.getDate()!==d) return null;
+  const p = n=>String(n).padStart(2,'0');
+  return {qb:`${p(m)}/${p(d)}/${y}`, iso:`${y}-${p(m)}-${p(d)}`};
+}
+
+/* ---------------- Conversion ---------------- */
+let loaded = null;   // {fileName, rows:[...], accountId}
+
+function buildRows(acc, text){
+  const all = parseCSV(text);
+  if(!all.length) throw new Error('The file is empty.');
+  // Find the header row (some banks put extra lines at the top)
+  let hIdx = -1;
+  for(let i=0;i<Math.min(all.length,15);i++){ if(colIndex(all[i], acc.dateCol)>=0){ hIdx=i; break; } }
+  if(hIdx<0){
+    throw new Error(`This file doesn't match the column settings for "${acc.name}". Expected a column named "${acc.dateCol}". `+
+      `Columns found: ${all[0].map(norm).filter(Boolean).join(', ')}. Check you picked the right account, or fix it under "Edit account → Column settings".`);
+  }
+  const H = all[hIdx];
+  const need = (label, name, required)=>{
+    if(!name){ if(required) throw new Error(`The account "${acc.name}" has no ${label} column set. Fix it under Edit account → Column settings.`); return -1; }
+    const i = colIndex(H, name);
+    if(i<0 && required) throw new Error(`Column "${name}" (${label}) was not found in this file. Columns found: ${H.map(norm).filter(Boolean).join(', ')}.`);
+    return i;
+  };
+  const iDate = need('date', acc.dateCol, true);
+  const iDesc = need('description', acc.descCol, true);
+  let iAmt=-1,iOut=-1,iIn=-1;
+  if(acc.amountMode==='split'){ iOut = need('money out', acc.outCol, true); iIn = need('money in', acc.inCol, true); }
+  else iAmt = need('amount', acc.amountCol, true);
+  const iNum = need('check number', acc.numCol, false);
+  const iCat = need("bank's category", acc.bankCatCol, false);
+  const iSkip = need('skip', acc.skipCol, false);
+  const skipText = lc(acc.skipText);
+
+  const done = new Set(S.exported[acc.id] || []);
+  const seen = {};
+  const rows = [];
+  const problems = [];
+  for(let r=hIdx+1; r<all.length; r++){
+    const cells = all[r];
+    const get = i => i>=0 && i<cells.length ? cells[i] : '';
+    const line = r+1;
+    const dt = parseDate(get(iDate));
+    const desc = norm(get(iDesc));
+    if(!dt){ problems.push(`Line ${line}: couldn't read the date "${norm(get(iDate))}". Row left out.`); continue; }
+    let amt, dir;
+    if(acc.amountMode==='split'){
+      const o = parseAmount(get(iOut)), n = parseAmount(get(iIn));
+      if(o) { amt = Math.abs(o); dir='out'; }
+      else if(n) { amt = Math.abs(n); dir='in'; }
+      else { problems.push(`Line ${line}: no amount found (${desc}). Row left out.`); continue; }
+    } else {
+      const v = parseAmount(get(iAmt));
+      if(v===null){ problems.push(`Line ${line}: couldn't read the amount "${norm(get(iAmt))}" (${desc}). Row left out.`); continue; }
+      if(v===0){ problems.push(`Line ${line}: amount is 0.00 (${desc}). Row left out.`); continue; }
+      const isOut = acc.outNegative ? v<0 : v>0;
+      amt = Math.abs(v); dir = isOut ? 'out' : 'in';
+    }
+    const base = `${dt.iso}|${dir}|${amt.toFixed(2)}|${lc(desc)}`;
+    seen[base] = (seen[base]||0)+1;
+    const key = base+'|'+seen[base];
+    const row = {key, date:dt.qb, iso:dt.iso, desc, amount:amt, dir,
+      num: norm(get(iNum)), bankCat: norm(get(iCat)),
+      include:true, status:'', manual:false, category:'', ruled:false, line,
+      vendor:'', memo:desc, manualV:false, manualM:false, customer:'', manualC:false, custFrom:null};
+    if(acc.skipOn!==false && iSkip>=0 && skipText && lc(get(iSkip)).includes(skipText)){
+      row.include=false; row.status=`Skipped (${norm(acc.skipCol)}: ${norm(get(iSkip))})`;
+    } else if(done.has(key)){
+      row.include=false; row.status='Already exported';
+    }
+    rows.push(row);
+  }
+  rows.sort((a,b)=> a.iso<b.iso?-1 : a.iso>b.iso?1 : a.line-b.line);
+  return {rows, problems};
+}
+
+function ruleMatches(acc, r, row){
+  if(r.account && r.account!=='all' && r.account!==acc.id) return false;
+  if(r.dir && r.dir!=='any' && r.dir!==row.dir) return false;
+  const t = lc(r.text); if(!t) return false;
+  const hay = r.field==='bankcat' ? lc(row.bankCat) : lc(row.desc);
+  return hay.includes(t);
+}
+// Category: first matching category rule. Payee: vendor auto-select words, then (optionally) vendor names.
+function resolveRules(acc, row){
+  const out = {category:null, vendor:null, vendorFrom:null};
+  for(const r of S.rules){ if(ruleMatches(acc,r,row) && norm(r.category)){ out.category = norm(r.category); break; } }
+  const p = findPayee(row.desc);
+  if(p){ out.vendor = p.name; out.vendorFrom = p.from; }
+  return out;
+}
+function applyCategories(){
+  if(!loaded) return;
+  const acc = currentAccount(); if(!acc) return;
+  for(const row of loaded.rows){
+    const res = S.autoCat ? resolveRules(acc,row) : {category:null, vendor:null};
+    if(!row.manual){ row.category = res.category || (row.dir==='out' ? acc.uncatOut : acc.uncatIn); row.ruled = !!res.category; }
+    if(!row.manualV){ row.vendor = res.vendor || ''; row.vRuled = !!res.vendor; row.vFrom = res.vendorFrom; }
+    if(!row.manualM) row.memo = autoMemo(row);
+  }
+  matchCustomers();
+}
+/* Customer: a synced receipt with the SAME amount and SAME payee (closest date, within 30 days) */
+function matchCustomers(){
+  if(!loaded) return;
+  const recs = (KK.receipts||[]).filter(r=>norm(r.customer) && r.total!=null && norm(r.payee));
+  const rows = loaded.rows.filter(r=>!r.manualC);
+  rows.forEach(r=>{ r.customer=''; r.custFrom=null; });
+  const used = new Set(loaded.rows.filter(r=>r.manualC && r.custFrom).map(r=>r.custFrom.id));
+  const pairs = [];
+  rows.forEach(row=>{
+    if(row.dir!=='out' || !norm(row.vendor)) return;
+    recs.forEach(rc=>{
+      if(Math.abs(Number(rc.total)-row.amount) < 0.005 && lc(rc.payee)===lc(row.vendor)){
+        const dd = Math.abs((new Date(row.iso+'T12:00') - new Date((rc.date||row.iso)+'T12:00'))/864e5);
+        if(dd <= 30) pairs.push({row, rc, dd});
+      }
+    });
+  });
+  pairs.sort((a,b)=>a.dd-b.dd);
+  const done = new Set();
+  for(const p of pairs){
+    if(done.has(p.row) || used.has(p.rc.id)) continue;
+    p.row.customer = p.rc.customer; p.row.custFrom = p.rc; done.add(p.row); used.add(p.rc.id);
+  }
+}
+function customerNames(){ return KK.customers || []; }
+function canonCustomer(n){ const k=lc(n); if(!k) return ''; return customerNames().find(c=>lc(c)===k) || norm(n); }
+function isKnownCustomer(n){ const k=lc(n); return !!k && customerNames().some(c=>lc(c)===k); }
+// Memo rule: payee filled in -> memo is the payee's name; blank payee -> memo is the full bank description
+function autoMemo(row){ return norm(row.vendor) ? norm(row.vendor) : row.desc; }
+// QuickBooks names: max 41 characters, no colons
+function cleanName(s){ return iifClean(s).replace(/:/g,' ').replace(/\s+/g,' ').trim().slice(0,41); }
+/* ---- QuickBooks vendor list ---- */
+function vTokens(s){ return lc(s).replace(/['’`]/g,'').split(/[^a-z0-9]+/).filter(Boolean); }
+// Whole-word match of a vendor name inside a bank description ("THE HOME DEPOT 1546" contains "Home Depot" and "The Home Depot")
+function vendorInDesc(vt, dt){
+  if(!vt.length) return false;
+  const joined = vt.join('');
+  if(dt.includes(joined)) return true;                 // e.g. "HOMEDEPOT.COM" or "7-ELEVEN" vs "7-Eleven"
+  for(let i=0;i+vt.length<=dt.length;i++){ let ok=true; for(let j=0;j<vt.length;j++){ if(dt[i+j]!==vt[j]){ ok=false; break; } } if(ok) return true; }
+  return false;
+}
+let vendorIndex = null;
+function vendorNames(){ return (S.vendorList||[]).map(v=>v.name); }
+function buildVendorIndex(){ vendorIndex = (S.vendorList||[]).map(v=>({name:v.name, t:vTokens(v.name), words:(v.words||[]).map(w=>lc(norm(w))).filter(Boolean)})); }
+function matchVendorList(desc){
+  if(!vendorIndex) buildVendorIndex();
+  const dt = vTokens(desc); let best=null;
+  for(const v of vendorIndex) if(v.t.length && vendorInDesc(v.t, dt) && (!best || v.t.join(' ').length > best.t.join(' ').length)) best=v;
+  return best ? best.name : null;
+}
+// A vendor's auto-select words (longest matching word wins)
+function matchVendorWords(desc){
+  if(!vendorIndex) buildVendorIndex();
+  const d = lc(norm(desc)); let best=null, bl=0;
+  for(const v of vendorIndex) for(const w of v.words) if(w.length>bl && d.includes(w)){ best=v; bl=w.length; }
+  return best ? best.name : null;
+}
+function findPayee(desc){
+  const a = matchVendorWords(desc); if(a) return {name:a, from:'rule'};
+  if(S.useVendorList!==false){ const b = matchVendorList(desc); if(b) return {name:b, from:'list'}; }
+  return null;
+}
+// Exact QuickBooks spelling of a vendor if it's on the list ("lowes" -> "Lowes")
+function canonVendor(name){ const n=norm(name); if(!n) return ''; const k=lc(n); const hit=vendorNames().find(v=>lc(v)===k); return hit || n; }
+function isKnownVendor(name){ const k=lc(name); return !!k && vendorNames().some(v=>lc(v)===k); }
+// Guess a vendor from a bank description, e.g. "Amazon.com*5E4250O42" -> "Amazon.com", "THE HOME DEPOT 1546" -> "THE HOME DEPOT"
+function guessVendor(desc){
+  let v = norm(desc).split(/[*#]/)[0];
+  v = v.replace(/\b(\d[\w-]*)\b/g,' ').replace(/\s+-\s*\w?$/,'').replace(/\s+/g,' ').trim();
+  return v || norm(desc);
+}
+
+function iifClean(s){
+  return String(s||'')
+    .normalize('NFKD').replace(/[̀-ͯ]/g,'')
+    .replace(/[\t\r\n]+/g,' ').replace(/"/g,"'")
+    .replace(/[^\x20-\x7E]/g,'')
+    .replace(/\s+/g,' ').trim().slice(0,4000);
+}
+function typeLabel(acc, dir){
+  if(acc.type==='CCARD') return dir==='out' ? 'Charge' : 'Credit';
+  return dir==='out' ? 'Expense' : 'Deposit';
+}
+function buildIIF(acc, rows){
+  const L = [];
+  // Add any vendor names used, so QuickBooks knows them (existing vendors are left as they are)
+  // List every payee used: QuickBooks leaves existing vendors as they are and creates any that are missing
+  const vendors = [...new Set(rows.map(r=>cleanName(r.vendor)).filter(Boolean))];
+  if(S.addVendors!==false && vendors.length){
+    L.push('!VEND\tNAME');
+    vendors.forEach(v=>L.push('VEND\t'+v));
+  }
+  L.push(
+    '!TRNS\tTRNSID\tTRNSTYPE\tDATE\tACCNT\tNAME\tAMOUNT\tDOCNUM\tMEMO',
+    '!SPL\tSPLID\tTRNSTYPE\tDATE\tACCNT\tNAME\tAMOUNT\tDOCNUM\tMEMO',
+    '!ENDTRNS'
+  );
+  for(const r of rows){
+    let t;
+    if(acc.type==='CCARD') t = r.dir==='out' ? 'CREDIT CARD' : 'CC CREDIT';
+    else t = r.dir==='out' ? 'CHECK' : 'DEPOSIT';
+    const a = r.amount.toFixed(2);
+    const main  = r.dir==='out' ? '-'+a : a;     // effect on the bank/card register
+    const split = r.dir==='out' ? a : '-'+a;     // opposite side, to the category
+    const memo = iifClean(r.memo), num = iifClean(r.num), name = cleanName(r.vendor);
+    // Payee goes on the main line; for deposits QuickBooks keeps "Received from" on the split line
+    const cust = iifClean(r.customer).slice(0,159);
+    const tName = t==='DEPOSIT' ? '' : name, sName = t==='DEPOSIT' ? (name || cust) : cust;
+    L.push(['TRNS','',t,r.date,iifClean(acc.name),tName,main,num,memo].join('\t'));
+    L.push(['SPL','',t,r.date,iifClean(r.category),sName,split,num,memo].join('\t'));
+    L.push('ENDTRNS');
+  }
+  return L.join('\r\n') + '\r\n';
+}
+
+/* ---------------- Main screen ---------------- */
+function renderAccounts(){
+  const sel = $('accountSelect');
+  const prev = sel.value || S.lastAccountId;
+  sel.innerHTML='';
+  if(!S.accounts.length) sel.append(el('option',{value:'', text:'(no accounts — add one)'}));
+  S.accounts.slice().sort((a,b)=>a.name.localeCompare(b.name)).forEach(a=> sel.append(el('option',{value:a.id, text:a.name})));
+  if(S.accounts.some(a=>a.id===prev)) sel.value = prev;
+  $('btnEditAccount').disabled = !S.accounts.length;
+  renderAccountInfo();
+  refreshCatList();
+}
+function kindLabel(a){ return a.type==='CCARD' ? 'Credit Card' : 'Bank'; }
+function renderAccountInfo(){
+  const ca = currentAccount(), bd = $('accTypeBadge');
+  bd.textContent = ca ? (ca.type==='CCARD' ? '💳 Credit Card' : '🏦 Bank') : '';
+  bd.className = 'acc-type ' + (ca ? (ca.type==='CCARD' ? 'cc' : 'bank') : 'hidden');
+  const a = currentAccount();
+  $('accountInfo').textContent = a
+    ? `${a.type==='CCARD' ? '' : SUBTYPES[subtypeOf(a)]+' · '}${PRESET_LABELS[a.preset]||'Custom file layout'} · Uncategorized: ${a.uncatOut} / ${a.uncatIn}`
+    : 'Add an account to get started.';
+}
+function refreshCatList(){
+  const cl = $('custList'); cl.innerHTML=''; customerNames().forEach(c=>cl.append(el('option',{value:c})));
+  const set = new Set(KK.categories || []);
+  S.accounts.forEach(a=>{ set.add(a.uncatOut); set.add(a.uncatIn); });
+  S.rules.forEach(r=>set.add(r.category));
+  if(loaded) loaded.rows.forEach(r=>set.add(r.category));
+  const dl = $('catList'); dl.innerHTML='';
+  [...set].filter(Boolean).sort((a,b)=>a.localeCompare(b)).forEach(c=>dl.append(el('option',{value:c})));
+  const vs = new Set(vendorNames());
+  if(loaded) loaded.rows.forEach(r=>vs.add(norm(r.vendor)));
+  const vl = $('vendList'); vl.innerHTML='';
+  [...vs].filter(Boolean).sort((a,b)=>a.localeCompare(b)).forEach(v=>vl.append(el('option',{value:v})));
+}
+
+function renderPreview(){
+  const acc = currentAccount();
+  const has = !!(loaded && acc);
+  $('emptyState').classList.toggle('hidden', has);
+  $('previewArea').classList.toggle('hidden', !has);
+  if(!has) return;
+  const tb = $('tbody'); tb.innerHTML='';
+  for(const row of loaded.rows){
+    const cb = el('input',{type:'checkbox', checked:row.include, 'aria-label':'Include'});
+    cb.addEventListener('change',()=>{ row.include=cb.checked; tr.classList.toggle('off',!row.include); renderSummary(); });
+    const cat = el('input',{type:'text', value:row.category, list:'catList', 'aria-label':'Category'});
+    cat.addEventListener('input',()=>{ row.category=cat.value; row.manual=true; row.ruled=false; autoTag.classList.add('hidden'); renderSummary(); });
+    cat.addEventListener('change',()=>{ row.category=norm(cat.value); cat.value=row.category; refreshCatList(); renderSummary(); });
+    const autoTag = el('span',{class:'tag auto'+(row.ruled?'':' hidden'), text:'rule', title:'Set by a rule'});
+    const ven = el('input',{type:'text', value:row.vendor, list:'vendList', placeholder:'(blank)', 'aria-label':'Payee'});
+    const vTag = el('span',{class:'tag auto'+(row.vRuled?'':' hidden'), text: row.vFrom==='list'?'name':'auto', title: row.vFrom==='list'?'The payee name was found in the description':"Picked by the payee's auto-select words"});
+    const newTag = el('span',{class:'tag warn', text:'new payee', title:'Not on your payee list. It will be added to QuickBooks when you import.'});
+    const showNew = ()=> newTag.classList.toggle('hidden', !norm(row.vendor) || isKnownVendor(row.vendor));
+    showNew();
+    ven.addEventListener('input',()=>{ row.vendor=ven.value; row.manualV=true; row.vRuled=false; vTag.classList.add('hidden'); showNew(); if(!row.manualM){ row.memo=autoMemo(row); mem.value=row.memo; } });
+    ven.addEventListener('change',()=>{ row.vendor=canonVendor(ven.value); ven.value=row.vendor; if(!row.manualM){ row.memo=autoMemo(row); mem.value=row.memo; } showNew(); refreshCatList(); if(!row.manualC){ matchCustomers(); renderPreview(); } });
+    const cus = el('input',{type:'text', value:row.customer, list:'custList', placeholder:'(none)', 'aria-label':'Customer'});
+    const rcIcon = row.custFrom ? el('span',{class:'rc', text:'🧾', title:`From a receipt: ${row.custFrom.date} · ${row.custFrom.payee} · ${money(Number(row.custFrom.total))}${row.custFrom.note?' · '+row.custFrom.note:''}`}) : null;
+    const custWarn = el('span',{class:'tag warn', text:'not on list', title:'This customer is not on your customer list. QuickBooks needs the exact name.'});
+    const showCW = ()=> custWarn.classList.toggle('hidden', !norm(row.customer) || isKnownCustomer(row.customer));
+    showCW();
+    cus.addEventListener('input',()=>{ row.customer=cus.value; row.manualC=true; if(rcIcon) rcIcon.remove(); showCW(); });
+    cus.addEventListener('change',()=>{ row.customer=canonCustomer(cus.value); cus.value=row.customer; row.manualC=!!row.customer || row.manualC; showCW(); });
+    const mem = el('input',{type:'text', value:row.memo, placeholder:'(empty)', 'aria-label':'Memo'});
+    mem.addEventListener('input',()=>{ row.memo=mem.value; row.manualM=true; });
+    mem.addEventListener('change',()=>{ row.memo=norm(mem.value); mem.value=row.memo; });
+    const descCell = el('td',{class:'desc'}, el('div',{text:row.desc}));
+    if(row.status) descCell.append(el('span',{class:'tag warn', text:row.status}));
+    if(row.num) descCell.append(el('span',{class:'muted', text:'  #'+row.num}));
+    const tr = el('tr',{class: row.include?'':'off'},
+      el('td',null,cb),
+      el('td',{text:row.date, style:'white-space:nowrap'}),
+      descCell,
+      el('td',null, el('span',{class:'tag '+row.dir, text:typeLabel(acc,row.dir)})),
+      el('td',{class:'amt'+(row.dir==='in'?' in':''), text:(row.dir==='out'?'−':'+')+money(row.amount)}),
+      el('td',{class:'cat'}, el('div',{class:'row', style:'flex-wrap:nowrap'}, cat)),
+      el('td',{class:'vend'}, el('div',{class:'row', style:'flex-wrap:nowrap'}, ven, newTag,
+        el('button',{class:'small', text:'+', title:'Add this payee, or auto-select it for transactions like this', onclick:()=>openRules('vend', row)}))),
+      el('td',{class:'cust'}, el('div',{class:'row', style:'flex-wrap:nowrap'}, cus, rcIcon, custWarn)),
+      el('td',{class:'memo'}, mem),
+      el('td',null, el('button',{class:'small', text:'+ Rule', title:'Make a category rule from this transaction', onclick:()=>openRules('cat', row)}))
+    );
+    tb.append(tr);
+  }
+  renderSummary();
+}
+function renderSummary(){
+  const acc = currentAccount(); if(!loaded||!acc) return;
+  const inc = loaded.rows.filter(r=>r.include);
+  const out = inc.filter(r=>r.dir==='out').reduce((s,r)=>s+r.amount,0);
+  const inn = inc.filter(r=>r.dir==='in').reduce((s,r)=>s+r.amount,0);
+  const missing = inc.filter(r=>!norm(r.category)).length;
+  const sm = $('summary'); sm.innerHTML='';
+  const stat=(k,v)=>el('div',{class:'stat'}, el('div',{class:'k',text:k}), el('div',{class:'v',text:v}));
+  sm.append(stat('File', loaded.fileName), stat('Selected', `${inc.length} of ${loaded.rows.length}`),
+    stat(acc.type==='CCARD'?'Charges':'Money out', money(out)), stat(acc.type==='CCARD'?'Credits':'Money in', money(inn)),
+    stat('Net', money(inn-out)));
+  const cats = {};
+  inc.forEach(r=>{ const c = norm(r.category)||'(blank)'; cats[c]=(cats[c]||0)+1; });
+  const note = $('catNote'); note.innerHTML='';
+  if(inc.length){
+    note.append(el('b',{text:'Categories in this file: '}),
+      Object.keys(cats).sort().map(c=>`${c} (${cats[c]})`).join(', '),
+      el('br'), 'Each one must match an account in your QuickBooks Chart of Accounts exactly.');
+  } else note.textContent = 'No transactions are selected.';
+  $('btnDownload').disabled = !inc.length || missing>0;
+  $('btnExcel').disabled = !inc.length;
+  $('btnDownload').title = missing ? 'Some selected rows have no category' : '';
+}
+
+async function loadCSVFile(file){
+  msg('fileMsg'); msg('downloadMsg');
+  const acc = currentAccount();
+  if(!acc){ msg('fileMsg','bad','Please add an account first (step 1).'); return; }
+  $('fileName').textContent = file.name;
+  try{
+    const text = await readFile(file);
+    const {rows, problems} = buildRows(acc, text);
+    loaded = {fileName:file.name, rows, accountId:acc.id, text};
+    applyCategories(); refreshCatList(); renderPreview();
+    const parts = [];
+    if(!rows.length) parts.push('No transactions were found in this file.');
+    if(problems.length) parts.push(...problems.slice(0,10), problems.length>10?`…and ${problems.length-10} more.`:null);
+    const skipped = rows.filter(r=>r.status).length;
+    if(parts.filter(Boolean).length){
+      const box = el('div'); parts.filter(Boolean).forEach(p=>box.append(el('div',{text:p}))); msg('fileMsg','warn',box);
+    } else msg('fileMsg','good',`Read ${rows.length} transactions.` + (skipped?` ${skipped} ${skipped===1?'is':'are'} unticked (already exported or skipped). Tick ${skipped===1?'it':'them'} if you want ${skipped===1?'it':'them'}.`:''));
+  }catch(e){
+    loaded = null; renderPreview();
+    msg('fileMsg','bad', e.message || String(e));
+  }
+}
+function reloadForAccount(){
+  // Re-read the same file when the account changes
+  if(!loaded) return;
+  const acc = currentAccount();
+  try{
+    const {rows} = buildRows(acc, loaded.text);
+    loaded.rows = rows; loaded.accountId = acc.id;
+    applyCategories(); renderPreview(); msg('fileMsg');
+  }catch(e){ const t=loaded.fileName; loaded=null; renderPreview(); msg('fileMsg','bad', e.message); $('fileName').textContent=t; }
+}
+
+$('accountSelect').addEventListener('change',()=>{ S.lastAccountId=$('accountSelect').value; saveSettings(); renderAccountInfo(); reloadForAccount(); });
+$('drop').addEventListener('click',()=>$('csvInput').click());
+$('drop').addEventListener('keydown',e=>{ if(e.key==='Enter'||e.key===' '){ e.preventDefault(); $('csvInput').click(); }});
+$('csvInput').addEventListener('change',e=>{ const f=e.target.files[0]; if(f) loadCSVFile(f); e.target.value=''; });
+['dragenter','dragover'].forEach(ev=>$('drop').addEventListener(ev,e=>{ e.preventDefault(); $('drop').classList.add('over'); }));
+['dragleave','drop'].forEach(ev=>$('drop').addEventListener(ev,e=>{ e.preventDefault(); $('drop').classList.remove('over'); }));
+$('drop').addEventListener('drop',e=>{ const f=e.dataTransfer.files[0]; if(f) loadCSVFile(f); });
+window.addEventListener('dragover',e=>e.preventDefault());
+window.addEventListener('drop',e=>e.preventDefault());
+
+$('autoCat').checked = S.autoCat;
+$('addVendors').checked = S.addVendors!==false;
+$('addVendors').addEventListener('change',()=>{ S.addVendors=$('addVendors').checked; saveSettings(); });
+$('autoCat').addEventListener('change',()=>{ S.autoCat=$('autoCat').checked; saveSettings(); applyCategories(); renderPreview(); });
+$('btnAll').addEventListener('click',()=>{ if(loaded){ loaded.rows.forEach(r=>r.include=true); renderPreview(); }});
+$('btnNone').addEventListener('click',()=>{ if(loaded){ loaded.rows.forEach(r=>r.include=false); renderPreview(); }});
+
+$('btnDownload').addEventListener('click',()=>{
+  const acc = currentAccount(); if(!loaded||!acc) return;
+  const rows = loaded.rows.filter(r=>r.include);
+  if(!rows.length) return;
+  const again = rows.filter(r=>r.status==='Already exported' || r.status==='Exported just now').length;
+  if(again && !confirm(`${again} of the selected transactions were already exported before. Importing them again will create duplicates in QuickBooks.\n\nDownload anyway?`)) return;
+  rows.forEach(r=>r.category = norm(r.category));
+  const iif = buildIIF(acc, rows);
+  const safe = acc.name.replace(/[^A-Za-z0-9]+/g,'-').replace(/^-|-$/g,'') || 'account';
+  const fname = `${safe}_${rows[0].iso}_to_${rows[rows.length-1].iso}.iif`;
+  downloadFile(fname, iif, 'text/plain');
+  const set = new Set(S.exported[acc.id]||[]);
+  rows.forEach(r=>{ set.add(r.key); r.status='Exported just now'; r.include=false; });
+  S.exported[acc.id] = [...set];
+  saveSettings(); renderPreview();
+  msg('downloadMsg','good',`Saved "${fname}" with ${rows.length} transactions (usually in your Downloads folder). In QuickBooks: File → Utilities → Import → IIF Files.`);
+});
+
+/* ---------------- Account dialog ---------------- */
+let editingId = null;
+const F = id=>$(id);
+function setAmtMode(m){
+  document.querySelectorAll('input[name=amtMode]').forEach(r=>r.checked = r.value===m);
+  $('singleBox').classList.toggle('hidden', m!=='single');
+  $('splitBox').classList.toggle('hidden', m!=='split');
+}
+function fillCols(c){
+  F('fDate').value=c.dateCol||''; F('fDesc').value=c.descCol||''; F('fAmt').value=c.amountCol||'';
+  F('fSign').value = c.outNegative===false ? 'pos':'neg';
+  F('fOut').value=c.outCol||''; F('fIn').value=c.inCol||''; F('fNum').value=c.numCol||'';
+  F('fBankCat').value=c.bankCatCol||''; F('fSkipCol').value=c.skipCol||''; F('fSkipText').value=c.skipText||'';
+  F('fSkipOn').checked = c.skipOn===undefined ? !!(c.skipCol&&c.skipText) : !!c.skipOn; typeHint();
+  setAmtMode(c.amountMode||'single');
+}
+function typeHint(){
+  const card = isCardSel();
+  $('typeHint').textContent = card
+    ? 'Purchases → Credit Card Charge. Refunds → Credit Card Credit.'
+    : 'Money in → Deposit. Money out → Check (expense).';
+  $('uncatOutLabel').textContent = card ? 'Category for uncategorized purchases' : 'Category for uncategorized money OUT';
+  $('uncatInLabel').textContent = card ? 'Category for uncategorized refunds / credits' : 'Category for uncategorized money IN';
+  $('skipLabel').innerHTML = card ? '<b>Skip card payments</b> (recommended)' : '<b>Skip some rows</b>';
+  const how = (F('fSkipCol').value && F('fSkipText').value) ? ` Rows where "${norm(F('fSkipCol').value)}" contains "${norm(F('fSkipText').value)}" are skipped (change under Column settings).` : ' Set which rows under Column settings.';
+  $('skipHint').textContent = (card ? 'Payments are already entered from your checking account, so importing them here too would count them twice. Skipped rows still show in the list, unticked, so you can include one if you need to.' : 'For example, transfers between your own accounts.') + how;
+}
+function openAccount(acc){
+  editingId = acc ? acc.id : null;
+  $('accTitle').textContent = acc ? 'Edit account' : 'Add new account';
+  const a = acc || Object.assign({name:'', type:'BANK', subtype:'checking', preset:'chase_checking', uncatOut:'Uncategorized Expenses', uncatIn:'Uncategorized Income'}, PRESETS.chase_checking);
+  F('fName').value=a.name; F('fType').value=subtypeOf(a); F('fPreset').value=a.preset||'custom';
+  F('fUncatOut').value=a.uncatOut; F('fUncatIn').value=a.uncatIn;
+  fillCols(a); typeHint();
+  $('colDetails').open = (a.preset==='custom');
+  $('btnDeleteAcc').classList.toggle('hidden', !acc);
+  $('btnClearHist').classList.toggle('hidden', !acc);
+  $('accErr').classList.add('hidden'); $('sampleMsg').textContent=''; $('hdrList').innerHTML='';
+  $('accDlg').showModal(); F('fName').focus();
+}
+function isCardSel(){ return F('fType').value==='ccard'; }
+F('fType').addEventListener('change',()=>{
+  if(isCardSel() && F('fUncatIn').value==='Uncategorized Income') F('fUncatIn').value='Uncategorized Expenses';
+  if(!isCardSel() && F('fUncatIn').value==='Uncategorized Expenses') F('fUncatIn').value='Uncategorized Income';
+  typeHint();
+  const p = F('fPreset').value;
+  if(isCardSel() && p==='chase_checking'){ F('fPreset').value='chase_card'; fillCols(PRESETS.chase_card); }
+  if(!isCardSel() && p==='chase_card'){ F('fPreset').value='chase_checking'; fillCols(PRESETS.chase_checking); }
+});
+F('fPreset').addEventListener('change',()=>{
+  const p = F('fPreset').value;
+  if(PRESETS[p]){ fillCols(PRESETS[p]); const wantCard = p==='chase_card'; if(isCardSel()!==wantCard){ F('fType').value = wantCard?'ccard':'checking'; F('fType').dispatchEvent(new Event('change')); } typeHint(); }
+  else $('colDetails').open = true;
+});
+document.querySelectorAll('input[name=amtMode]').forEach(r=>r.addEventListener('change',()=>{ setAmtMode(r.value); markCustom(); }));
+['fDate','fDesc','fAmt','fSign','fOut','fIn','fNum','fBankCat','fSkipCol','fSkipText'].forEach(id=>F(id).addEventListener('input',()=>{ markCustom(); typeHint(); }));
+function markCustom(){
+  // If a Chase preset's columns were changed by hand, mark the layout as custom
+  const p = F('fPreset').value; if(!PRESETS[p]) return;
+  const c = readCols(), P = PRESETS[p];
+  const same = ['dateCol','descCol','amountMode','amountCol','outCol','inCol','numCol','bankCatCol','skipCol','skipText'].every(k=>norm(c[k])===norm(P[k])) && c.outNegative===P.outNegative;
+  if(!same) F('fPreset').value='custom';
+}
+function readCols(){
+  const mode = document.querySelector('input[name=amtMode]:checked').value;
+  return {dateCol:norm(F('fDate').value), descCol:norm(F('fDesc').value), amountMode:mode, amountCol:norm(F('fAmt').value),
+    outNegative:F('fSign').value==='neg', outCol:norm(F('fOut').value), inCol:norm(F('fIn').value), numCol:norm(F('fNum').value),
+    bankCatCol:norm(F('fBankCat').value), skipCol:norm(F('fSkipCol').value), skipText:norm(F('fSkipText').value), skipOn:F('fSkipOn').checked};
+}
+$('btnSample').addEventListener('click',()=>$('sampleInput').click());
+$('sampleInput').addEventListener('change', async e=>{
+  const f = e.target.files[0]; e.target.value=''; if(!f) return;
+  try{
+    const rows = parseCSV(await readFile(f));
+    if(!rows.length) throw new Error('empty');
+    // header row = first row with at least 2 non-numeric text cells
+    const H = rows.find(r=>r.filter(c=>/[a-z]/i.test(c) && !parseDate(c)).length>=2) || rows[0];
+    const headers = H.map(norm).filter(Boolean);
+    const dl = $('hdrList'); dl.innerHTML=''; headers.forEach(h=>dl.append(el('option',{value:h})));
+    const pick = (...pats)=>{ for(const p of pats){ const h = headers.find(x=>p.test(x)); if(h) return h; } return ''; };
+    const guess = {
+      fDate: pick(/post.*date/i,/^date$/i,/date/i), fDesc: pick(/^description$/i,/desc/i,/payee/i,/merchant/i,/name/i,/memo/i),
+      fAmt: pick(/^amount$/i,/amount/i), fOut: pick(/debit/i,/withdraw/i,/money out/i), fIn: pick(/credit/i,/deposit/i,/money in/i),
+      fNum: pick(/check/i,/cheque/i), fBankCat: pick(/categ/i)
+    };
+    for(const k in guess) if(!F(k).value && guess[k]) F(k).value = guess[k];
+    if(!F('fAmt').value && F('fOut').value && F('fIn').value) setAmtMode('split');
+    markCustom();
+    $('sampleMsg').textContent = `Columns found in "${f.name}": ${headers.join(', ')}. Click in a box below to pick from these.`;
+    $('colDetails').open = true;
+  }catch(err){ $('sampleMsg').textContent = "Couldn't read that file as a CSV."; }
+});
+$('btnSaveAcc').addEventListener('click',()=>{
+  const name = norm(F('fName').value), c = readCols();
+  const errs = [];
+  if(!name) errs.push('Enter the QuickBooks account name.');
+  if(S.accounts.some(a=>a.id!==editingId && lc(a.name)===lc(name))) errs.push('There is already an account with that name.');
+  if(!norm(F('fUncatOut').value) || !norm(F('fUncatIn').value)) errs.push('Enter both uncategorized categories.');
+  if(!c.dateCol) errs.push('Set the Date column.');
+  if(!c.descCol) errs.push('Set the Description column.');
+  if(c.amountMode==='single' && !c.amountCol) errs.push('Set the Amount column.');
+  if(c.amountMode==='split' && (!c.outCol||!c.inCol)) errs.push('Set both the money out and money in columns.');
+  if(c.skipOn && (!c.skipCol || !c.skipText)) errs.push('To skip rows, fill in both the column and the text under Column settings (or untick the skip box).');
+  if(errs.length){ const b=$('accErr'); b.textContent=errs.join(' '); b.classList.remove('hidden'); $('colDetails').open = errs.some(x=>/column/i.test(x)); return; }
+  const data = Object.assign({name, type:kindOf(F('fType').value), subtype:F('fType').value, preset:F('fPreset').value,
+    uncatOut:norm(F('fUncatOut').value), uncatIn:norm(F('fUncatIn').value)}, c);
+  let id = editingId;
+  if(id){ Object.assign(S.accounts.find(a=>a.id===id), data); }
+  else { id = uid(); S.accounts.push(Object.assign({id}, data)); }
+  S.lastAccountId = id; saveSettings();
+  $('accDlg').close();
+  renderAccounts(); $('accountSelect').value = id; renderAccountInfo(); reloadForAccount();
+});
+$('btnDeleteAcc').addEventListener('click',()=>{
+  const a = S.accounts.find(x=>x.id===editingId); if(!a) return;
+  if(!confirm(`Delete the account "${a.name}" from this program?\n\nThis does NOT change anything in QuickBooks.`)) return;
+  S.accounts = S.accounts.filter(x=>x.id!==a.id);
+  S.rules = S.rules.filter(r=>r.account!==a.id);
+  delete S.exported[a.id];
+  saveSettings(); $('accDlg').close(); loaded=null; $('fileName').textContent='No file chosen'; msg('fileMsg');
+  renderAccounts(); renderPreview();
+});
+$('btnClearHist').addEventListener('click',()=>{
+  const a = S.accounts.find(x=>x.id===editingId); if(!a) return;
+  const n = (S.exported[a.id]||[]).length;
+  if(!confirm(`Forget the ${n} transactions remembered as already exported for "${a.name}"?`)) return;
+  delete S.exported[a.id]; saveSettings(); alert('Export history cleared.'); reloadForAccount();
+});
+$('btnAddAccount').addEventListener('click',()=>openAccount(null));
+$('btnEditAccount').addEventListener('click',()=>{ const a=currentAccount(); if(a) openAccount(a); });
+
+/* ---------------- Rules dialog (tabs: Category / Vendors / Bank) ---------------- */
+let editingRule = null, editingVendor = null, curTab = 'cat';
+function accName(id){ if(!id||id==='all') return 'All accounts'; const a=S.accounts.find(x=>x.id===id); return a?a.name:'(deleted)'; }
+function showTab(t){
+  curTab = t;
+  document.querySelectorAll('#rulesDlg .tab').forEach(b=>b.classList.toggle('on', b.dataset.tab===t));
+  document.querySelectorAll('#rulesDlg .pane').forEach(p=>p.classList.toggle('on', p.dataset.pane===t));
+  document.querySelector('#rulesDlg .dlg-body').scrollTop = 0;
+}
+document.querySelectorAll('#rulesDlg .tab').forEach(b=>b.addEventListener('click',()=>showTab(b.dataset.tab)));
+function afterChange(){ saveSettings(); vendorIndex=null; refreshCatList(); applyCategories(); renderPreview(); }
+
+/* --- Category tab --- */
+function renderRules(){
+  const sel = $('rAcc'), keep = sel.value;
+  sel.innerHTML=''; sel.append(el('option',{value:'all',text:'All accounts'}));
+  S.accounts.forEach(a=>sel.append(el('option',{value:a.id,text:a.name+' — '+kindLabel(a)})));
+  sel.value = [...sel.options].some(o=>o.value===keep) ? keep : 'all';
+  const tb = $('rulesBody'); tb.innerHTML='';
+  $('ruleCount').textContent = S.rules.length + (S.rules.length===1?' rule':' rules');
+  if(!S.rules.length) tb.append(el('tr',null, el('td',{colspan:6, class:'empty-rules', text:'No category rules yet. Add one below, or click "+ Rule" next to a transaction.'})));
+  S.rules.forEach((r,i)=>{
+    const move=(d)=>{ const j=i+d; if(j<0||j>=S.rules.length) return; [S.rules[i],S.rules[j]]=[S.rules[j],S.rules[i]]; rulesChanged(); };
+    tb.append(el('tr',{class: r===editingRule?'editing':''},
+      el('td',{text:String(i+1)}),
+      el('td',null, el('span',{class:'muted',text:(r.field==='bankcat'?"Bank's category":'Description')+' contains '}), el('b',{text:`"${r.text}"`})),
+      el('td',{text:r.dir==='out'?'Out':r.dir==='in'?'In':'In or out'}),
+      el('td',null, el('b',{text:r.category})),
+      el('td',{text:accName(r.account)}),
+      el('td',{style:'white-space:nowrap'},
+        el('button',{class:'small',text:'↑',title:'Move up',onclick:()=>move(-1)}),' ',
+        el('button',{class:'small',text:'↓',title:'Move down',onclick:()=>move(1)}),' ',
+        el('button',{class:'small',text:'Edit',onclick:()=>editRule(r)}),' ',
+        el('button',{class:'small danger',text:'Delete',onclick:()=>{ if(confirm(`Delete the rule for "${r.text}"?`)){ S.rules=S.rules.filter(x=>x!==r); rulesChanged(); }}}))
+    ));
+  });
+}
+function rulesChanged(){ renderRules(); afterChange(); }
+function resetRuleForm(){
+  const was = editingRule; editingRule=null; $('ruleFormTitle').textContent='➕ Add a category rule'; if(was) renderRules();
+  $('rText').value=''; $('rCat').value=''; $('rDir').value='any'; $('rField').value='desc';
+  $('btnRuleSave').textContent='Add rule'; $('btnRuleCancel').classList.add('hidden'); $('ruleErr').classList.add('hidden');
+}
+function editRule(r){
+  editingRule=r; $('rField').value=r.field||'desc'; $('rText').value=r.text; $('rDir').value=r.dir||'any';
+  $('rCat').value=r.category||''; $('rAcc').value=r.account||'all';
+  $('btnRuleSave').textContent='Save changes'; $('btnRuleCancel').classList.remove('hidden');
+  $('ruleFormTitle').textContent='✏️ Editing rule #'+(S.rules.indexOf(r)+1);
+  renderRules();
+  $('ruleFormTitle').scrollIntoView({behavior:'smooth', block:'start'}); $('rText').focus({preventScroll:true});
+}
+$('btnRuleSave').addEventListener('click',()=>{
+  const text=norm($('rText').value), category=norm($('rCat').value);
+  const e=$('ruleErr');
+  if(!text||!category){ e.textContent='Fill in both the text to look for and the category.'; e.classList.remove('hidden'); return; }
+  const data={field:$('rField').value, text, dir:$('rDir').value, category, account:$('rAcc').value};
+  if(editingRule) Object.assign(editingRule,data); else S.rules.push(Object.assign({id:uid()},data));
+  const rule = editingRule || S.rules[S.rules.length-1];
+  if(loaded){ const acc=currentAccount(); loaded.rows.forEach(r=>{ if(ruleMatches(acc,rule,r)) r.manual=false; }); }
+  if(!S.autoCat){ S.autoCat=true; $('autoCat').checked=true; }
+  resetRuleForm(); rulesChanged();
+});
+$('btnRuleCancel').addEventListener('click',resetRuleForm);
+
+/* --- Vendors / Payees tab --- */
+function parseWords(s){ const out=[]; String(s||'').split(',').map(norm).forEach(w=>{ if(w && !out.some(x=>lc(x)===lc(w))) out.push(w); }); return out; }
+function renderVendors(){
+  $('vendCount').textContent = S.vendorList.length + ' payees';
+  $('useVendorList').checked = S.useVendorList!==false;
+  const q = lc($('vendSearch').value);
+  const tb = $('vendBody'); tb.innerHTML='';
+  const list = S.vendorList.filter(v=>!q || lc(v.name).includes(q) || v.words.some(w=>lc(w).includes(q)));
+  if(!list.length) tb.append(el('tr',null, el('td',{colspan:3, class:'empty-rules', text: q ? 'No payees match your search.' : 'No payees yet. Add one above.'})));
+  list.forEach(v=>{
+    tb.append(el('tr',{class: v===editingVendor?'editing':''},
+      el('td',null, el('b',{text:v.name})),
+      el('td',null, v.words.length ? v.words.map(w=>el('span',{class:'chip',text:w}))
+        : el('span',{class:'muted', text: S.useVendorList!==false ? 'its name' : '—'})),
+      el('td',{style:'white-space:nowrap'},
+        el('button',{class:'small',text:'Edit',onclick:()=>editVendor(v)}),' ',
+        el('button',{class:'small danger',text:'Delete',onclick:()=>{ if(confirm(`Remove "${v.name}" from this program's payee list?\n\nThis does NOT change QuickBooks.`)){ S.vendorList=S.vendorList.filter(x=>x!==v); if(editingVendor===v) resetVendorForm(); renderVendors(); afterChange(); }}}))
+    ));
+  });
+}
+function resetVendorForm(){
+  editingVendor=null; $('vName').value=''; $('vWords').value='';
+  $('vendFormTitle').textContent='➕ Add a payee'; $('btnVendSave').textContent='Add payee';
+  $('btnVendCancel').classList.add('hidden'); $('vendErr').classList.add('hidden');
+}
+function editVendor(v){
+  editingVendor=v; $('vName').value=v.name; $('vWords').value=v.words.join(', ');
+  $('vendFormTitle').textContent='✏️ Editing '+v.name; $('btnVendSave').textContent='Save changes';
+  $('btnVendCancel').classList.remove('hidden'); $('vendMsg').textContent='';
+  renderVendors();
+  $('vendFormTitle').scrollIntoView({behavior:'smooth', block:'start'}); $('vWords').focus({preventScroll:true});
+}
+$('btnVendSave').addEventListener('click',()=>{
+  const name = cleanName($('vName').value), words = parseWords($('vWords').value), e=$('vendErr');
+  if(!name){ e.textContent='Type the payee name, exactly as it is in QuickBooks.'; e.classList.remove('hidden'); return; }
+  const other = S.vendorList.find(v=>lc(v.name)===lc(name) && v!==editingVendor);
+  let msgText;
+  if(editingVendor){
+    if(other){ e.textContent=`"${other.name}" is already on the list.`; e.classList.remove('hidden'); return; }
+    editingVendor.name=name; editingVendor.words=words; msgText=`✓ Saved ${name}`;
+  } else if(other){
+    words.forEach(w=>{ if(!other.words.some(x=>lc(x)===lc(w))) other.words.push(w); }); msgText=`✓ ${other.name} was already on the list. Auto-select words updated.`;
+  } else {
+    S.vendorList.push({name, words}); msgText=`✓ Added ${name}`;
+  }
+  S.vendorList.sort((a,b)=>a.name.localeCompare(b.name,undefined,{sensitivity:'base'}));
+  // rows this vendor now matches follow it again
+  if(loaded){ vendorIndex=null; loaded.rows.forEach(r=>{ const p=findPayee(r.desc); if(p && lc(p.name)===lc(other?other.name:name)){ r.manualV=false; r.manualM=false; } }); }
+  if(!S.autoCat){ S.autoCat=true; $('autoCat').checked=true; }
+  resetVendorForm(); $('vendSearch').value=''; renderVendors(); afterChange();
+  $('vendMsg').textContent = msgText;
+});
+$('btnVendCancel').addEventListener('click',()=>{ resetVendorForm(); renderVendors(); });
+$('vendSearch').addEventListener('input',renderVendors);
+$('useVendorList').addEventListener('change',()=>{ S.useVendorList=$('useVendorList').checked; renderVendors(); afterChange(); });
+
+/* --- Bank tab --- */
+function renderDefaults(accId){
+  const sel = $('defAcc'); sel.innerHTML='';
+  S.accounts.forEach(a=>sel.append(el('option',{value:a.id,text:a.name+' — '+kindLabel(a)})));
+  if(!S.accounts.length){ $('btnDefSave').disabled=true; return; }
+  $('btnDefSave').disabled=false;
+  sel.value = S.accounts.some(a=>a.id===accId) ? accId : S.accounts[0].id;
+  fillDefaults();
+}
+function fillDefaults(){
+  const a = S.accounts.find(x=>x.id===$('defAcc').value); if(!a) return;
+  const card = a.type==='CCARD';
+  $('dOutLabel').textContent = card ? 'No rule matches: purchases go to' : 'No rule matches: money out goes to';
+  $('dInLabel').textContent = card ? 'No rule matches: refunds / credits go to' : 'No rule matches: money in goes to';
+  $('dSkipLabel').innerHTML = card ? '<b>Skip card payments</b> (recommended, so payments are not counted twice)' : '<b>Skip some rows</b> (for example transfers between your own accounts)';
+  $('dOut').value=a.uncatOut||''; $('dIn').value=a.uncatIn||'';
+  $('dSkipOn').checked = a.skipOn===undefined ? !!(a.skipCol&&a.skipText) : !!a.skipOn;
+  $('dSkipCol').value=a.skipCol||''; $('dSkipText').value=a.skipText||'';
+  $('defMsg').textContent=''; $('defErr').classList.add('hidden');
+}
+$('defAcc').addEventListener('change',fillDefaults);
+$('btnDefSave').addEventListener('click',()=>{
+  const a = S.accounts.find(x=>x.id===$('defAcc').value); if(!a) return;
+  const out=norm($('dOut').value), inn=norm($('dIn').value), on=$('dSkipOn').checked, col=norm($('dSkipCol').value), txt=norm($('dSkipText').value);
+  const errs=[];
+  if(!out||!inn) errs.push('Fill in both "no rule matches" categories.');
+  if(on && (!col||!txt)) errs.push('To skip rows, fill in both the column and the text (or untick the skip box).');
+  const e=$('defErr'); if(errs.length){ e.textContent=errs.join(' '); e.classList.remove('hidden'); return; }
+  e.classList.add('hidden');
+  Object.assign(a,{uncatOut:out, uncatIn:inn, skipOn:on, skipCol:col, skipText:txt});
+  saveSettings(); refreshCatList(); renderAccountInfo();
+  if(currentAccount() && currentAccount().id===a.id) reloadForAccount();
+  $('defMsg').textContent = `✓ Saved for ${a.name}`;
+});
+
+/* --- open --- */
+function openRules(tab, fromRow){
+  resetRuleForm(); resetVendorForm(); $('vendSearch').value=''; $('vendMsg').textContent='';
+  renderRules(); renderVendors(); renderDefaults(currentAccount() ? currentAccount().id : null);
+  showTab(tab || curTab);
+  const acc = currentAccount();
+  if(fromRow && tab==='cat'){
+    $('rText').value = guessVendor(fromRow.desc); $('rDir').value = fromRow.dir;
+    const unc = fromRow.dir==='out'?acc.uncatOut:acc.uncatIn;
+    $('rCat').value = (fromRow.category && fromRow.category!==unc) ? fromRow.category : '';
+    $('rAcc').value = acc ? acc.id : 'all';
+  }
+  if(fromRow && tab==='vend'){
+    if(!vendorIndex) buildVendorIndex();
+    $('vName').value = canonVendor(norm(fromRow.vendor) || matchVendorList(fromRow.desc) || guessVendor(fromRow.desc));
+    $('vWords').value = guessVendor(fromRow.desc);
+  }
+  $('rulesDlg').showModal();
+  if(fromRow) (tab==='cat' ? (!$('rCat').value ? $('rCat') : $('rText')) : $('vWords')).focus();
+}
+$('btnRules').addEventListener('click',()=>openRules(null));
+
+/* ---------------- Excel (.xlsx) export: built here, no internet ---------------- */
+const CRC_TABLE = (()=>{ const t=new Uint32Array(256); for(let n=0;n<256;n++){ let c=n; for(let k=0;k<8;k++) c = c&1 ? 0xEDB88320^(c>>>1) : c>>>1; t[n]=c>>>0; } return t; })();
+function crc32(b){ let c=0xFFFFFFFF; for(let i=0;i<b.length;i++) c = CRC_TABLE[(c^b[i])&0xFF]^(c>>>8); return (c^0xFFFFFFFF)>>>0; }
+function makeZip(files){
+  const enc = new TextEncoder(), parts=[], central=[]; let offset=0;
+  const u16=n=>[n&255,(n>>>8)&255], u32=n=>[n&255,(n>>>8)&255,(n>>>16)&255,(n>>>24)&255];
+  for(const f of files){
+    const name=enc.encode(f.name), data=enc.encode(f.text), crc=crc32(data);
+    const common=[...u16(20),...u16(0x0800),...u16(0),...u16(0),...u16(0x21),...u32(crc),...u32(data.length),...u32(data.length),...u16(name.length),...u16(0)];
+    const local=new Uint8Array([...u32(0x04034b50),...common]);
+    parts.push(local,name,data);
+    central.push(new Uint8Array([...u32(0x02014b50),...u16(20),...common,...u16(0),...u16(0),...u16(0),...u32(0),...u32(offset)]),name);
+    offset += local.length+name.length+data.length;
+  }
+  const cdSize = central.reduce((n,a)=>n+a.length,0);
+  const end = new Uint8Array([...u32(0x06054b50),...u16(0),...u16(0),...u16(files.length),...u16(files.length),...u32(cdSize),...u32(offset),...u16(0)]);
+  return new Blob([...parts,...central,end],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+}
+function xmlEsc(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g,''); }
+function buildXlsx(acc, rows){
+  const head=['Date','Bank description','Type','Amount','Category','Payee','Customer','Memo','Check #','Account'];
+  const colL='ABCDEFGHIJ';
+  const str=(ref,v,st)=>`<c r="${ref}" t="inlineStr"${st?` s="${st}"`:''}><is><t xml:space="preserve">${xmlEsc(v)}</t></is></c>`;
+  const num=(ref,v,st)=>`<c r="${ref}" s="${st}"><v>${v}</v></c>`;
+  const fml=(ref,f,v,st)=>`<c r="${ref}" s="${st}"><f>${xmlEsc(f)}</f><v>${v}</v></c>`;
+  const xr=[]; xr.push(`<row r="1">${head.map((h,i)=>str(colL[i]+'1',h,3)).join('')}</row>`);
+  let tin=0,tout=0;
+  rows.forEach((r,i)=>{
+    const n=i+2, [y,m,d]=r.iso.split('-').map(Number);
+    const serial=(Date.UTC(y,m-1,d)-Date.UTC(1899,11,30))/86400000;
+    const amt = r.dir==='out' ? -r.amount : r.amount;
+    if(r.dir==='out') tout+=r.amount; else tin+=r.amount;
+    xr.push(`<row r="${n}">${num('A'+n,serial,1)}${str('B'+n,r.desc)}${str('C'+n,typeLabel(acc,r.dir))}${num('D'+n,amt.toFixed(2),2)}${str('E'+n,norm(r.category))}${norm(r.vendor)?str('F'+n,norm(r.vendor)):''}${norm(r.customer)?str('G'+n,norm(r.customer)):''}${norm(r.memo)?str('H'+n,norm(r.memo)):''}${r.num?str('I'+n,r.num):''}${str('J'+n,acc.name)}</row>`);
+  });
+  const last=rows.length+1, t=last+2;
+  const inL = acc.type==='CCARD'?'Total credits':'Total money in', outL = acc.type==='CCARD'?'Total charges':'Total money out';
+  xr.push(`<row r="${t}">${str('C'+t,inL,3)}${fml('D'+t,`SUMIF(D2:D${last},">0")`,tin.toFixed(2),4)}</row>`);
+  xr.push(`<row r="${t+1}">${str('C'+(t+1),outL,3)}${fml('D'+(t+1),`SUMIF(D2:D${last},"<0")`,(-tout).toFixed(2),4)}</row>`);
+  xr.push(`<row r="${t+2}">${str('C'+(t+2),'Net',3)}${fml('D'+(t+2),`SUM(D2:D${last})`,(tin-tout).toFixed(2),4)}</row>`);
+  const widths=[12,40,12,14,28,22,26,30,10,20];
+  const sheet=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetViews><sheetView workbookViewId="0"><pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews>
+<cols>${widths.map((w,i)=>`<col min="${i+1}" max="${i+1}" width="${w}" customWidth="1"/>`).join('')}</cols>
+<sheetData>${xr.join('')}</sheetData><autoFilter ref="A1:J${last}"/></worksheet>`;
+  const sheetName = xmlEsc(acc.name.replace(/[\\\/\?\*\[\]:]/g,' ').slice(0,31) || 'Transactions');
+  return makeZip([
+    {name:'[Content_Types].xml', text:`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/></Types>`},
+    {name:'_rels/.rels', text:`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>`},
+    {name:'xl/workbook.xml', text:`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="${sheetName}" sheetId="1" r:id="rId1"/></sheets><definedNames><definedName name="_xlnm._FilterDatabase" localSheetId="0" hidden="1">'${sheetName.replace(/'/g,"''")}'!$A$1:$J$${last}</definedName></definedNames><calcPr calcId="0" fullCalcOnLoad="1"/></workbook>`},
+    {name:'xl/_rels/workbook.xml.rels', text:`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>`},
+    {name:'xl/styles.xml', text:`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><numFmts count="1"><numFmt numFmtId="164" formatCode="&quot;$&quot;#,##0.00;[Red]\-&quot;$&quot;#,##0.00"/></numFmts><fonts count="2"><font><sz val="11"/><name val="Calibri"/></font><font><b/><sz val="11"/><name val="Calibri"/></font></fonts><fills count="3"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FFDDEBF7"/><bgColor indexed="64"/></patternFill></fill></fills><borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="5"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="14" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/><xf numFmtId="164" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/><xf numFmtId="0" fontId="1" fillId="2" borderId="0" xfId="0" applyFont="1" applyFill="1"/><xf numFmtId="164" fontId="1" fillId="0" borderId="0" xfId="0" applyNumberFormat="1" applyFont="1"/></cellXfs><cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>`},
+    {name:'xl/worksheets/sheet1.xml', text:sheet}
+  ]);
+}
+$('btnExcel').addEventListener('click',()=>{
+  const acc = currentAccount(); if(!loaded||!acc) return;
+  const rows = loaded.rows.filter(r=>r.include); if(!rows.length) return;
+  const safe = acc.name.replace(/[^A-Za-z0-9]+/g,'-').replace(/^-|-$/g,'') || 'account';
+  const fname = `${safe}_${rows[0].iso}_to_${rows[rows.length-1].iso}.xlsx`;
+  const url = URL.createObjectURL(buildXlsx(acc, rows));
+  const a = el('a',{href:url, download:fname}); document.body.append(a); a.click(); a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url), 2000);
+  msg('downloadMsg','good',`Saved "${fname}" with ${rows.length} transactions (usually in your Downloads folder). Open it with Excel.`);
+});
+
+/* ---------------- Backup / restore / help ---------------- */
+$('btnBackup').addEventListener('click',()=>{
+  const d = new Date(), p=n=>String(n).padStart(2,'0');
+  downloadFile(`kellerkraft-settings_${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}.json`, JSON.stringify(S,null,2), 'application/json');
+});
+$('btnRestore').addEventListener('click',()=>$('restoreInput').click());
+$('restoreInput').addEventListener('change', async e=>{
+  const f=e.target.files[0]; e.target.value=''; if(!f) return;
+  try{
+    const s = JSON.parse(await readFile(f));
+    if(!validSettings(s) || !s.accounts.length) throw new Error();
+    if(!confirm(`Load ${s.accounts.length} account(s) and ${(s.rules||[]).length} rule(s) from "${f.name}"?\n\nThis REPLACES the accounts and rules in the converter. Payees are ADDED to your master payee list.`)) return;
+    const merged = new Map((S.vendorList||[]).map(v=>[lc(v.name), {name:v.name, words:(v.words||[]).slice()}]));
+    const incoming = Array.isArray(s.vendorList) ? s.vendorList : (Array.isArray(s.vendors) ? s.vendors.map(n=>({name:n, words:[]})) : []);
+    incoming.forEach(v=>{ const k=lc(v.name); if(!k) return; const m=merged.get(k); if(m){ (v.words||[]).forEach(w=>{ if(!m.words.some(x=>lc(x)===lc(w))) m.words.push(w); }); } else merged.set(k,{name:norm(v.name), words:(v.words||[]).slice()}); });
+    s.vendorList = [...merged.values()];
+    S = normalize(s); vendorIndex=null; saveSettings(); loaded=null; $('addVendors').checked = S.addVendors!==false; $('fileName').textContent='No file chosen'; msg('fileMsg');
+    $('autoCat').checked=S.autoCat; renderAccounts(); renderPreview();
+    alert('Settings loaded.');
+  }catch(err){ alert("That file isn't a valid settings backup from this program."); }
+});
+const TOPICS=[...document.querySelectorAll('#tutNav button')].map(b=>b.dataset.topic);
+let curTopic='start';
+function showTopic(t){
+  if(!TOPICS.includes(t)) t='start'; curTopic=t;
+  document.querySelectorAll('#tutNav button').forEach(b=>b.classList.toggle('on',b.dataset.topic===t));
+  document.querySelectorAll('.tut-body section').forEach(x=>x.classList.toggle('on',x.dataset.topic===t));
+  document.querySelector('.tut-body').scrollTop=0;
+  const i=TOPICS.indexOf(t); $('tutPrev').disabled=i===0; $('tutNext').disabled=i===TOPICS.length-1;
+}
+function openHelp(t){ showTopic(t||curTopic); const d=$('helpDlg'); if(!d.open) d.showModal(); }
+$('tutNav').addEventListener('click',e=>{ const b=e.target.closest('button[data-topic]'); if(b) showTopic(b.dataset.topic); });
+document.querySelector('.tut-body').addEventListener('click',e=>{ const a=e.target.closest('[data-goto]'); if(a){ e.preventDefault(); showTopic(a.dataset.goto); }});
+$('tutPrev').addEventListener('click',()=>showTopic(TOPICS[TOPICS.indexOf(curTopic)-1]));
+$('tutNext').addEventListener('click',()=>showTopic(TOPICS[TOPICS.indexOf(curTopic)+1]));
+document.addEventListener('click',e=>{ const b=e.target.closest('[data-help]'); if(b){ e.preventDefault(); e.stopPropagation(); openHelp(b.dataset.help); }});
+$('btnHelp').addEventListener('click',()=>openHelp('start'));
+try{ if(localStorage.getItem('kk.offlineNoteClosed')==='1') $('offlineNote').classList.add('hidden'); }catch(e){}
+$('offlineX').addEventListener('click',()=>{ $('offlineNote').classList.add('hidden'); try{ localStorage.setItem('kk.offlineNoteClosed','1'); }catch(e){} });
+document.querySelectorAll('[data-close]').forEach(b=>b.addEventListener('click',()=>b.closest('dialog').close()));
+
+/* ---------------- Updates from the Receipts tab ---------------- */
+window.KKRefresh = async ()=>{
+  try{
+    const d = await (await fetch('/local/converter', {cache:'no-store'})).json();
+    KK.customers = d.customers; KK.categories = d.categories; KK.receipts = d.receipts;
+    const pj = JSON.stringify(d.payees||[]);
+    if(pj !== lastPayees){ S.vendorList = (d.payees||[]).map(p=>({name:p.name, words:(p.words||[]).slice()})); lastPayees = pj; vendorIndex = null; }
+    if(typeof d.useNames==='boolean') S.useVendorList = d.useNames;
+    refreshCatList();
+    if(loaded){ applyCategories(); renderPreview(); }
+  }catch(e){}
+};
+
+/* ---------------- Start ---------------- */
+const firstRun = !S.seenTutorial;
+S.seenTutorial = true;
+saveSettings();
+renderAccounts();
+renderPreview();
+if(firstRun) openHelp('start');
+};
+</script>
+<script>
+fetch('/local/converter', { cache:'no-store' }).then(r => r.json()).then(d => { window.__KK = d; window.__startConverter(); })
+  .catch(() => { document.body.innerHTML = '<p style="padding:30px;font:18px Segoe UI,sans-serif">Could not load the converter. Is KellerKraft Receipts running?</p>'; });
+</script>
+</body>
+</html>

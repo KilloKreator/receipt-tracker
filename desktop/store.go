@@ -48,6 +48,8 @@ type Data struct {
 	Payees     []Payee    `json:"payees"`
 	UseNames   bool       `json:"useNames"`
 	Devices    []Device   `json:"devices"`
+	// IIF converter settings (accounts, category rules, export history). Payees above are the master list.
+	Converter json.RawMessage `json:"converter,omitempty"`
 }
 
 type Store struct {

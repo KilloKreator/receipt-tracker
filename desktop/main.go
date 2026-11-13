@@ -34,7 +34,7 @@ import (
 )
 
 const (
-	appVersion = "0.1.2"
+	appVersion = "0.2.0"
 	httpPort   = 8780 // dashboard + phone setup page
 	httpsPort  = 8443 // phone sync
 	phoneApp   = "https://killokreator.github.io/receipt-tracker/"
@@ -367,6 +367,64 @@ func localSite() http.Handler {
 		dash(w, r)
 	})
 	mux.HandleFunc("/setup", pageFile("setup.html"))
+	convPage := pageFile("converter.html")
+	mux.HandleFunc("/converter", local(convPage))
+	// IIF converter: its settings + the master lists + receipts (for filling in customers)
+	mux.HandleFunc("/local/converter", local(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost {
+			var in struct {
+				Settings json.RawMessage `json:"settings"`
+				Payees   *[]Payee        `json:"payees"`
+				UseNames *bool           `json:"useNames"`
+			}
+			if json.NewDecoder(io.LimitReader(r.Body, 32<<20)).Decode(&in) != nil {
+				jsonErr(w, 400, "bad request")
+				return
+			}
+			store.mu.Lock()
+			defer store.mu.Unlock()
+			if len(in.Settings) > 0 && string(in.Settings) != "null" {
+				store.data.Converter = in.Settings
+			}
+			if in.Payees != nil {
+				store.data.Payees = cleanPayees(*in.Payees)
+			}
+			if in.UseNames != nil {
+				store.data.UseNames = *in.UseNames
+			}
+			if err := store.save(); err != nil {
+				jsonErr(w, 500, err.Error())
+				return
+			}
+			writeJSON(w, 200, map[string]bool{"ok": true})
+			return
+		}
+		type lite struct {
+			ID       string   `json:"id"`
+			Date     string   `json:"date"`
+			Total    *float64 `json:"total"`
+			Payee    string   `json:"payee"`
+			Customer string   `json:"customer"`
+			Note     string   `json:"note"`
+		}
+		store.mu.Lock()
+		rs := []lite{}
+		for _, x := range store.data.Receipts {
+			rs = append(rs, lite{x.ID, x.Date, x.Total, x.Payee, x.Customer, x.Note})
+		}
+		var settings any = nil
+		if len(store.data.Converter) > 0 {
+			settings = store.data.Converter
+		}
+		payees := store.data.Payees
+		if payees == nil {
+			payees = []Payee{}
+		}
+		resp := map[string]any{"settings": settings, "payees": payees, "useNames": store.data.UseNames,
+			"customers": nz(store.data.Customers), "categories": nz(store.data.Categories), "receipts": rs}
+		store.mu.Unlock()
+		writeJSON(w, 200, resp)
+	}))
 	// scripts used by the dashboard (PDF reader etc.), built into this program
 	mux.HandleFunc("/assets/", local(func(w http.ResponseWriter, r *http.Request) {
 		name := strings.TrimPrefix(r.URL.Path, "/assets/")
