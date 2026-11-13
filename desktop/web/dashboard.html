@@ -186,7 +186,16 @@ input[type=checkbox]{width:17px;height:17px;accent-color:var(--accent)}
   <div class="db">
     <div class="pane on" data-pane="cust">
       <p class="muted">One customer per line, spelled exactly as in QuickBooks (jobs as <i>Customer:Job</i>). Customers added on the phone appear here after syncing.</p>
+      <div class="row" style="margin-bottom:8px"><button type="button" data-qbimport="tCust">📄 Import from QuickBooks report…</button><span class="muted">Customer Contact List (PDF or CSV)</span></div>
       <textarea id="tCust" rows="16"></textarea>
+    </div>
+    <input type="file" id="qbFile" accept=".pdf,.csv,.txt,application/pdf,text/csv" class="hidden">
+    <details class="muted" style="margin-top:10px"><summary>How to make the QuickBooks report</summary>
+      <ol>
+        <li>In QuickBooks: <b>Reports → List → Customer Contact List</b> (or <b>Vendor Contact List</b>).</li>
+        <li>Click <b>Print → Report</b>, choose the printer <b>Microsoft Print to PDF</b> and save it. Or click <b>Excel → Create New Worksheet → Create a comma separated values (.csv) file</b>.</li>
+        <li>Click <b>📄 Import from QuickBooks report…</b> and choose that file.</li>
+      </ol></details>
     </div>
     <div class="pane" data-pane="cat">
       <p class="muted">One category per line, spelled exactly as in your QuickBooks Chart of Accounts, e.g. <i>Job Materials</i> or <i>Automobile:Fuel</i>.</p>
@@ -195,12 +204,13 @@ input[type=checkbox]{width:17px;height:17px;accent-color:var(--accent)}
     <div class="pane" data-pane="pay">
       <p class="muted">One payee per line. Optional auto-select words go after a <b>|</b>, separated by commas, e.g. <code>The Home Depot | HOME DEPOT, HOMEDEPOT</code>.</p>
       <div class="row" style="margin-bottom:8px">
-        <button type="button" id="bImport">⬆ Import payees from KellerKraft Time Saver…</button>
+        <button type="button" data-qbimport="tPay">📄 Import from QuickBooks report…</button>
+        <button type="button" id="bImport">⬆ Import from KellerKraft Time Saver…</button>
         <input type="file" id="importFile" accept=".json,application/json" class="hidden">
         <label class="check"><input type="checkbox" id="cNames"> Also pick a payee when its name is on the receipt</label>
       </div>
       <textarea id="tPay" rows="14"></textarea>
-      <p class="muted">To import: in KellerKraft Time Saver click <b>Back up settings</b>, then choose that file here.</p>
+      <p class="muted"><b>QuickBooks report:</b> Vendor Contact List (PDF or CSV). <b>KellerKraft Time Saver:</b> click <b>Back up settings</b> there, then choose that file here. It also brings the auto-select words (e.g. HOME DEPOT → The Home Depot).</p>
     </div>
   </div>
   <div class="df"><span class="muted">Lists are copied to the phone each time it syncs.</span><div class="row"><button type="button" data-close>Cancel</button><button type="button" class="primary" id="bSaveLists">Save lists</button></div></div>
@@ -219,6 +229,7 @@ input[type=checkbox]{width:17px;height:17px;accent-color:var(--accent)}
 
 <datalist id="payeeList"></datalist><datalist id="custList"></datalist><datalist id="catList"></datalist>
 <div class="toast hidden" id="toast"></div>
+<script src="/assets/qbimport.js"></script>
 
 <script>
 'use strict';
@@ -404,6 +415,29 @@ function parsePayees(text) {
   return text.split(/\r?\n/).map(l => { const [n, w] = l.split('|'); return { name: norm(n), words: (w || '').split(',').map(norm).filter(Boolean) }; }).filter(p => p.name);
 }
 $('bImport').onclick = () => $('importFile').click();
+let qbTarget = null;
+document.querySelectorAll('[data-qbimport]').forEach(b => b.onclick = () => { qbTarget = b.dataset.qbimport; $('qbFile').click(); });
+$('qbFile').onchange = async e => {
+  const f = e.target.files[0]; e.target.value = ''; if (!f) return;
+  let names;
+  try { names = await QBImport.fromFile(f); } catch (err) { alert("Couldn't read that file: " + err.message); return; }
+  if (!names.length) { alert('No names were found in that file. Is it a QuickBooks Customer or Vendor Contact List?'); return; }
+  const ta = $(qbTarget);
+  if (qbTarget === 'tPay') {
+    const cur = parsePayees(ta.value), have = new Set(cur.map(p => lc(p.name)));
+    const add = names.filter(n => !have.has(lc(n)));
+    if (!confirm(`Found ${names.length} payees in "${f.name}" (${add.length} new):\n\n${names.slice(0, 12).join('\n')}${names.length > 12 ? '\n…' : ''}\n\nAdd them to the list?`)) return;
+    add.forEach(n => cur.push({ name: n, words: [] }));
+    ta.value = payText(cur.sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' })));
+    toast(`Added ${add.length} payees. Click Save lists.`);
+  } else {
+    const cur = ta.value.split(/\r?\n/).map(norm).filter(Boolean), have = new Set(cur.map(lc));
+    const add = names.filter(n => !have.has(lc(n)));
+    if (!confirm(`Found ${names.length} customers in "${f.name}" (${add.length} new):\n\n${names.slice(0, 12).join('\n')}${names.length > 12 ? '\n…' : ''}\n\nAdd them to the list?`)) return;
+    ta.value = cur.concat(add).sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' })).join('\n');
+    toast(`Added ${add.length} customers. Click Save lists.`);
+  }
+};
 $('importFile').onchange = async e => {
   const f = e.target.files[0]; e.target.value = ''; if (!f) return;
   try {

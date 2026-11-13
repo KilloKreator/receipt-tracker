@@ -89,3 +89,8 @@ textarea{resize:vertical}
 .spinner{width:42px;height:42px;border-radius:50%;border:4px solid rgba(255,255,255,.3);border-top-color:#fff;animation:spin 1s linear infinite}
 @keyframes spin{to{transform:rotate(360deg)}}
 .toast{position:fixed;left:16px;right:16px;bottom:calc(var(--safe-bot) + 90px);z-index:40;background:#222;color:#fff;padding:12px 14px;border-radius:12px;font-size:15px;text-align:center;box-shadow:0 6px 20px rgba(0,0,0,.3)}
+details.card.conn summary{list-style:none;cursor:pointer;display:flex;justify-content:space-between;align-items:center}
+details.card.conn summary::-webkit-details-marker{display:none}
+details.card.conn summary::after{content:'›';font-size:26px;color:var(--muted);transform:rotate(90deg);transition:transform .2s}
+details.card.conn[open] summary::after{transform:rotate(-90deg)}
+details.card.conn[open] summary{margin-bottom:6px}

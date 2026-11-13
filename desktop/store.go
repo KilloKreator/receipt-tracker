@@ -69,8 +69,12 @@ func openStore(dir string) (*Store, error) {
 			s.data = Data{UseNames: true}
 		}
 	}
+	// The standard QuickBooks catch-all category is always on the list
+	s.data.Categories = cleanList(append(s.data.Categories, DefaultCategory))
 	return s, nil
 }
+
+const DefaultCategory = "Uncategorized Expenses"
 
 // caller holds the lock
 func (s *Store) save() error {

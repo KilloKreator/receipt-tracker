@@ -1,6 +1,7 @@
 /* KellerKraft Receipts — phone app */
 'use strict';
-const VERSION = '0.1.0';
+const VERSION = '0.1.1';
+const DEFAULT_CATEGORY = 'Uncategorized Expenses';
 const $ = id => document.getElementById(id);
 const norm = s => String(s == null ? '' : s).replace(/\s+/g, ' ').trim();
 const lc = s => norm(s).toLowerCase();
@@ -112,7 +113,7 @@ $('cropOk').onclick = async () => {
     const out = Scan.process(crop.canvas, crop.corners, settings.bw ? 'bw' : 'gray');
     const blob = await Scan.toBlob(out);
     const rec = { id: uuid(), created: Date.now(), updated: Date.now(), date: todayISO(), total: null, payee: '', memo: '', memoManual: false,
-      customer: '', category: '', note: '', image: blob, thumb: Scan.thumb(out), synced: false, ocrText: '' };
+      customer: '', category: DEFAULT_CATEGORY, note: '', image: blob, thumb: Scan.thumb(out), synced: false, ocrText: '' };
     crop = null; busy();
     openEdit(rec, true);
     readReceipt(out, rec);
@@ -186,7 +187,7 @@ function openEdit(rec, fresh) {
   $('fPayee').value = rec.payee || '';
   $('fMemo').value = rec.memo || '';
   fillSelect($('fCustomer'), lists.customers, rec.customer, '— Choose customer —', '➕ Add new customer…');
-  fillSelect($('fCategory'), lists.categories, rec.category, '— Choose category —', '➕ Add new category…');
+  fillSelect($('fCategory'), lists.categories.concat([DEFAULT_CATEGORY]), rec.category, '— Choose category —', '➕ Add new category…');
   $('fNote').value = rec.note || '';
   $('editMeta').textContent = fresh ? '' : `Scanned ${new Date(rec.created).toLocaleString()} · ${rec.synced ? 'On your computer ✓' : 'Waiting to sync'}`;
   $('editDelete').textContent = (!fresh && rec.synced) ? 'Remove from this phone' : 'Delete receipt';
@@ -213,7 +214,7 @@ function selectAdd(sel, key, label) {
     const existing = lists[listKey].find(n => lc(n) === lc(name));
     const v = existing || name;
     if (!existing) { lists[listKey].push(v); lists.pending[listKey].push(v); saveLists(); }
-    fillSelect(sel, lists[listKey], v, sel.options[0].textContent, sel.options[sel.options.length - 1].textContent);
+    fillSelect(sel, listKey === 'categories' ? lists[listKey].concat([DEFAULT_CATEGORY]) : lists[listKey], v, sel.options[0].textContent, sel.options[sel.options.length - 1].textContent);
   });
 }
 selectAdd($('fCustomer'), 'customer', 'customer');
@@ -316,6 +317,8 @@ async function openSettings() {
   $('sAddr').value = settings.addr || ''; $('sCode').value = '';
   $('sBW').checked = settings.bw !== false; $('sNames').checked = settings.names !== false;
   $('pairMsg').textContent = settings.token ? `✓ Connected to ${settings.addr}` : 'Not connected yet.';
+  $('connSummary').textContent = settings.token ? `✓ Connected to ${settings.addr}` : 'Not connected yet. Tap to set up.';
+  $('connCard').open = !settings.token;
   try {
     const est = await navigator.storage.estimate();
     const all = await DB.all();
@@ -337,6 +340,7 @@ $('btnPair').onclick = async () => {
     const r = await api('POST', '/api/pair', { code, device: 'iPhone' });
     settings.token = r.token; await saveSettings();
     $('pairMsg').textContent = `✓ Connected to ${r.name || 'your computer'}`;
+    $('connSummary').textContent = `✓ Connected to ${settings.addr}`;
     sync(true);
   } catch (e) {
     await saveSettings();
@@ -361,7 +365,11 @@ $('btnClean').onclick = async () => {
   refreshPayeeList();
   renderHome();
   if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
-  if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js').catch(() => {});
+  if ('serviceWorker' in navigator && location.protocol === 'https:') {
+    const hadController = !!navigator.serviceWorker.controller;
+    navigator.serviceWorker.addEventListener('controllerchange', () => { if (hadController && !current) location.reload(); });
+    navigator.serviceWorker.register('sw.js').then(reg => reg.update()).catch(() => {});
+  }
   sync(false);
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') sync(false); });
   setInterval(() => sync(false), 120000);

@@ -92,14 +92,6 @@
     </header>
     <div class="scroll">
       <div class="card">
-        <h3>Connect to your computer</h3>
-        <p class="small">On your computer, open <b>KellerKraft Receipts</b> and click <b>Phone setup</b>. Type in the address and code it shows.</p>
-        <label>Computer address<input type="text" id="sAddr" inputmode="decimal" placeholder="e.g. 192.168.1.20" autocomplete="off"></label>
-        <label>Code<input type="text" id="sCode" inputmode="numeric" placeholder="6 digits" maxlength="6" autocomplete="off"></label>
-        <button class="primary wide" id="btnPair">Connect</button>
-        <div id="pairMsg" class="small"></div>
-      </div>
-      <div class="card">
         <h3>Scanning</h3>
         <label class="row"><input type="checkbox" id="sBW" checked> Black &amp; white scan (like Notes)</label>
         <label class="row"><input type="checkbox" id="sNames" checked> Fill in the payee when its name is on the receipt</label>
@@ -110,6 +102,14 @@
         <button class="secondary wide" id="btnClean">Remove synced receipts from this phone</button>
         <p class="small muted">They stay safe on your computer.</p>
       </div>
+      <details class="card conn" id="connCard">
+        <summary><span><b>Computer connection</b><br><span class="small muted" id="connSummary"></span></span></summary>
+        <p class="small">On your computer, open <b>KellerKraft Receipts</b> and click <b>Phone setup</b>. Type in the address and code it shows.</p>
+        <label>Computer address<input type="text" id="sAddr" inputmode="decimal" placeholder="e.g. 192.168.1.20" autocomplete="off"></label>
+        <label>Code<input type="text" id="sCode" inputmode="numeric" placeholder="6 digits" maxlength="6" autocomplete="off"></label>
+        <button class="primary wide" id="btnPair">Connect</button>
+        <div id="pairMsg" class="small"></div>
+      </details>
       <p class="small muted center" id="version"></p>
     </div>
   </section>

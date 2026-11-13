@@ -34,7 +34,7 @@ import (
 )
 
 const (
-	appVersion = "0.1.1"
+	appVersion = "0.1.2"
 	httpPort   = 8780 // dashboard + phone setup page
 	httpsPort  = 8443 // phone sync
 	phoneApp   = "https://killokreator.github.io/receipt-tracker/"
@@ -367,6 +367,23 @@ func localSite() http.Handler {
 		dash(w, r)
 	})
 	mux.HandleFunc("/setup", pageFile("setup.html"))
+	// scripts used by the dashboard (PDF reader etc.), built into this program
+	mux.HandleFunc("/assets/", local(func(w http.ResponseWriter, r *http.Request) {
+		name := strings.TrimPrefix(r.URL.Path, "/assets/")
+		if strings.Contains(name, "..") {
+			http.NotFound(w, r)
+			return
+		}
+		b, err := webFS.ReadFile("web/" + name)
+		if err != nil {
+			http.NotFound(w, r)
+			return
+		}
+		if strings.HasSuffix(name, ".js") || strings.HasSuffix(name, ".mjs") {
+			w.Header().Set("Content-Type", "text/javascript; charset=utf-8")
+		}
+		w.Write(b)
+	}))
 	mux.HandleFunc("/ca.crt", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/x-x509-ca-cert")
 		w.Header().Set("Content-Disposition", `attachment; filename="KellerKraft-Receipts.crt"`)
@@ -499,7 +516,7 @@ func localSite() http.Handler {
 			store.data.Customers = cleanList(*in.Customers)
 		}
 		if in.Categories != nil {
-			store.data.Categories = cleanList(*in.Categories)
+			store.data.Categories = cleanList(append(*in.Categories, DefaultCategory))
 		}
 		if in.Payees != nil {
 			store.data.Payees = cleanPayees(*in.Payees)
