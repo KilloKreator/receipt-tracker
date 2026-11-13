@@ -518,7 +518,7 @@ td.cust input{width:100%;min-width:0}
           <li><b>Type:</b> <span class="tag out">Charge</span> / <span class="tag out">Expense</span> is money out. <span class="tag in">Credit</span> / <span class="tag in">Deposit</span> is money in.</li>
           <li><b>Category:</b> where the money goes in QuickBooks. Click in the box to type or pick a different one.</li>
           <li><b>Payee:</b> who you paid, e.g. <i>Amazon.com</i>. A rule fills it in, or you can type it. Otherwise it stays blank.</li>
-          <li><b>Customer:</b> filled in automatically when a receipt scanned on the phone has the <b>same amount and the same payee</b> (closest date, within 30 days). A 🧾 shows it came from a receipt; hover over it to see which one. You can type or change it. It goes on the expense line in QuickBooks (the Customer:Job column), so the customer name must match QuickBooks exactly.</li>
+          <li><b>Customer:</b> filled in automatically when a receipt scanned on the phone has the <b>same amount and the same payee</b>. The date doesn't have to match, since bank dates are often a few days later. If several receipts match, the closest date is used. A 🧾 shows it came from a receipt; hover over it to see which one. You can type or change it. It goes on the expense line in QuickBooks (the Customer:Job column), so the customer name must match QuickBooks exactly.</li>
           <li><b>Memo:</b> filled in automatically with the <b>payee's name</b> (e.g. <i>Amazon</i>). When the payee is <b>blank</b>, the memo holds the full bank description (e.g. <i>Amazon.com*5E4250O42</i>) so you can still tell what it was. You can type your own memo on any row.</li>
           <li><b>+</b> (far right, after Memo): makes a category rule from that row, so similar transactions get categorized automatically next time.</li>
           <li><b>Auto-categorize ☑:</b> on means use your rules. Off means everything goes to <i>Uncategorized</i>.</li>
@@ -955,7 +955,7 @@ function applyCategories(){
   }
   matchCustomers();
 }
-/* Customer: a synced receipt with the SAME amount and SAME payee (closest date, within 30 days) */
+/* Customer: a receipt with the SAME amount and SAME payee (bank dates are often a few days off, so the date doesn't have to match; the closest date wins) */
 function matchCustomers(){
   if(!loaded) return;
   const recs = (KK.receipts||[]).filter(r=>norm(r.customer) && r.total!=null && norm(r.payee));
@@ -968,7 +968,7 @@ function matchCustomers(){
     recs.forEach(rc=>{
       if(Math.abs(Number(rc.total)-row.amount) < 0.005 && lc(rc.payee)===lc(row.vendor)){
         const dd = Math.abs((new Date(row.iso+'T12:00') - new Date((rc.date||row.iso)+'T12:00'))/864e5);
-        if(dd <= 30) pairs.push({row, rc, dd});
+        pairs.push({row, rc, dd});          // only total + payee must match; the date just picks the closest
       }
     });
   });
