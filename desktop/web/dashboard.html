@@ -69,6 +69,8 @@ ol li{margin:6px 0}
 .pane{display:none}.pane.on{display:block}
 label.check{display:inline-flex;gap:8px;align-items:center;cursor:pointer}
 input[type=checkbox]{width:17px;height:17px;accent-color:var(--accent)}
+.netbox{border:1px solid var(--line);border-radius:8px;padding:10px 12px;background:var(--bg);margin-top:8px}
+.ok{color:var(--good);font-weight:600}.bad{color:var(--bad);font-weight:600}
 .toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#222;color:#fff;padding:10px 16px;border-radius:10px;z-index:50}
 .hidden{display:none!important}
 .newflash td{animation:flash 2.5s ease-out}
@@ -161,7 +163,19 @@ input[type=checkbox]{width:17px;height:17px;accent-color:var(--accent)}
       </div>
     </div>
     <p class="muted" id="phonesInfo"></p>
-    <p class="muted">If Windows asked whether to allow KellerKraft Receipts on networks, it must be allowed on <b>Private</b> networks, and your home Wi-Fi must be set to <b>Private</b> in Windows.</p>
+    <div class="netbox" id="netBox">
+      <b>🔌 Connection check</b> <span class="muted" id="netSummary">checking…</span>
+      <ul id="netList" class="muted" style="margin:6px 0 4px;padding-left:20px"></ul>
+      <div class="row"><button type="button" class="primary" id="bNetFix">🔧 Fix Windows network settings</button><button type="button" class="small" id="bNetRe">Check again</button></div>
+      <p class="muted" style="margin:6px 0 0">The fix sets your home network to <b>Private</b> and lets KellerKraft Receipts through Windows Firewall. Windows will ask <i>"Do you want to allow this app to make changes?"</i>. Click <b>Yes</b>.</p>
+    </div>
+    <details style="margin-top:10px"><summary class="muted">Phone still can't connect?</summary>
+      <ul class="muted">
+        <li>The iPhone must be on the <b>same Wi-Fi</b> as this computer, not a guest network.</li>
+        <li>Try the other addresses for this computer listed above, if there are any.</li>
+        <li>Some routers block devices from seeing each other ("AP isolation" / "client isolation"). If nothing works, check the router's settings.</li>
+      </ul>
+    </details>
   </div>
   <div class="df"><button type="button" class="danger" id="bForget">Disconnect all phones</button><div class="row"><button type="button" id="bNewCode">New code</button><button type="button" class="primary" data-close>Done</button></div></div>
 </dialog>
@@ -237,7 +251,7 @@ async function refresh() {
 function status() {
   const st = $('status');
   if (!S.ips || !S.ips.length) { st.textContent = '⚠ Not on a Wi-Fi network'; st.className = 'pill warn'; }
-  else { st.textContent = `📶 Ready for phone sync · ${S.ips[0]}`; st.className = 'pill'; }
+  else if (!window.netBad) { st.textContent = `📶 Ready for phone sync · ${S.ips[0]}`; st.className = 'pill'; }
   if ($('dSetup').open) fillSetup();
 }
 function render() {
@@ -351,9 +365,30 @@ function fillSetup() {
   const mins = Math.max(0, Math.round((S.pairExpires - Date.now()) / 60000));
   $('codeExp').textContent = `Code works for about ${mins} more minute${mins === 1 ? '' : 's'}. Each code connects one phone.`;
   $('phonesInfo').textContent = S.devices ? `${S.devices} phone${S.devices === 1 ? ' is' : 's are'} connected.` : 'No phones connected yet.';
-  if (S.ips && S.ips.length > 1) $('phonesInfo').textContent += ` Other addresses for this computer: ${S.ips.slice(1).join(', ')}`;
+  const others = (S.addrs || []).slice(1);
+  if (others.length) $('phonesInfo').textContent += ' Other addresses for this computer (try these if the first doesn\'t work): ' + others.map(a => `${a.ip} (${a.adapter}${a.virtual ? ', virtual' : ''})`).join(', ');
 }
-$('bSetup').onclick = () => { fillSetup(); $('dSetup').showModal(); };
+$('bSetup').onclick = () => { fillSetup(); $('dSetup').showModal(); netCheck(); };
+function showNet(n) {
+  const list = $('netList'); list.innerHTML = '';
+  if (!n.supported) { $('netSummary').textContent = '(only on Windows)'; $('netBox').classList.add('hidden'); return; }
+  $('netSummary').innerHTML = n.ok ? '<span class="ok">✓ Windows is set up to let the phone connect</span>' : '<span class="bad">⚠ Windows may be blocking the phone</span>';
+  (n.networks || []).forEach(x => list.append(el('li', null, `Network "${x.name}" (${x.adapter}): `, el('span', { class: x.category === 'Public' ? 'bad' : 'ok', text: x.category === 'Public' ? 'Public ⚠ (blocks the phone)' : x.category + ' ✓' }))));
+  list.append(el('li', null, 'Windows Firewall permission: ', el('span', { class: n.allowRule ? 'ok' : 'bad', text: n.allowRule ? 'allowed ✓' : 'missing ⚠' })));
+  if (n.blockRules) list.append(el('li', null, el('span', { class: 'bad', text: `${n.blockRules} firewall rule(s) blocking KellerKraft Receipts ⚠` })));
+  $('bNetFix').classList.toggle('hidden', !!n.ok);
+}
+async function netCheck() {
+  $('netSummary').textContent = 'checking…';
+  try { showNet(await (await fetch('/local/netcheck', { cache: 'no-store' })).json()); } catch (e) { $('netSummary').textContent = '(could not check)'; }
+}
+$('bNetRe').onclick = netCheck;
+$('bNetFix').onclick = async () => {
+  $('bNetFix').disabled = true; $('netSummary').textContent = 'Fixing… click Yes if Windows asks.';
+  try { const n = await post('/local/netfix'); showNet(n); if (n.ok) { window.netBad = false; status(); } toast(n.ok ? 'Fixed ✓ Try the phone again.' : 'Partly fixed. See the list.'); }
+  catch (e) { $('netSummary').innerHTML = '<span class="bad">' + e.message + '</span>'; }
+  finally { $('bNetFix').disabled = false; }
+};
 $('bNewCode').onclick = async () => { await post('/local/newcode'); sig = ''; await refresh(); fillSetup(); };
 $('bForget').onclick = async () => { if (!confirm('Disconnect all phones? They will need a new code to sync again.')) return; await post('/local/forgetphones'); await refresh(); fillSetup(); };
 
@@ -403,5 +438,8 @@ document.querySelectorAll('[data-close]').forEach(b => b.addEventListener('click
 
 refresh();
 setInterval(refresh, 4000);
+fetch('/local/netcheck', { cache: 'no-store' }).then(r => r.json()).then(n => {
+  if (n.supported && !n.ok) { const st = $('status'); st.textContent = '⚠ Windows may be blocking the phone. Open 📱 Phone setup.'; st.className = 'pill warn'; window.netBad = true; }
+}).catch(() => {});
 </script>
 </body></html>

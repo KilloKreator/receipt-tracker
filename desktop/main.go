@@ -34,7 +34,7 @@ import (
 )
 
 const (
-	appVersion = "0.1.0"
+	appVersion = "0.1.1"
 	httpPort   = 8780 // dashboard + phone setup page
 	httpsPort  = 8443 // phone sync
 	phoneApp   = "https://killokreator.github.io/receipt-tracker/"
@@ -391,9 +391,10 @@ func localSite() http.Handler {
 		http.ServeFile(w, r, store.imagePath(id))
 	}))
 	mux.HandleFunc("/local/state", local(func(w http.ResponseWriter, r *http.Request) {
-		var ips []string
-		for _, ip := range lanIPs() {
-			ips = append(ips, ip.String())
+		addrs := lanAddrs()
+		ips := []string{}
+		for _, a := range addrs {
+			ips = append(ips, a.IP)
 		}
 		pairMu.Lock()
 		code, exp := pairCode, pairExpires
@@ -413,7 +414,7 @@ func localSite() http.Handler {
 			rs = append(rs, *x)
 		}
 		resp := map[string]any{
-			"version": appVersion, "dataDir": dataDir, "ips": ips, "httpPort": httpPort, "httpsPort": httpsPort,
+			"version": appVersion, "dataDir": dataDir, "ips": ips, "addrs": addrs, "httpPort": httpPort, "httpsPort": httpsPort,
 			"pairCode": code, "pairExpires": exp.UnixMilli(), "phoneApp": phoneApp, "devices": len(store.data.Devices),
 			"receipts": rs, "customers": nz(store.data.Customers), "categories": nz(store.data.Categories),
 			"payees": store.data.Payees, "useNames": store.data.UseNames, "autostart": autostartEnabled(),
@@ -535,6 +536,16 @@ func localSite() http.Handler {
 			return
 		}
 		writeJSON(w, 200, map[string]bool{"on": autostartEnabled()})
+	}))
+	mux.HandleFunc("/local/netcheck", local(func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, 200, netCheck())
+	}))
+	mux.HandleFunc("/local/netfix", local(func(w http.ResponseWriter, r *http.Request) {
+		if err := netFix(); err != nil {
+			jsonErr(w, 500, err.Error())
+			return
+		}
+		writeJSON(w, 200, netCheck())
 	}))
 	mux.HandleFunc("/local/openfolder", local(func(w http.ResponseWriter, r *http.Request) {
 		openFolder(dataDir)

@@ -17,6 +17,8 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"sort"
+	"strings"
 	"time"
 )
 
@@ -107,13 +109,31 @@ func (c *certs) serverCert(ips []net.IP) (tls.Certificate, error) {
 	return tls.Certificate{Certificate: [][]byte{der, c.caDER}, PrivateKey: key}, nil
 }
 
-// This computer's Wi-Fi / network addresses (private IPv4 only)
-func lanIPs() []net.IP {
-	var out []net.IP
+// This computer's network addresses (private IPv4 only), best first:
+// real Wi-Fi / Ethernet before virtual adapters (VPN, VirtualBox, Hyper-V, WSL, Docker…)
+type netAddr struct {
+	IP      string `json:"ip"`
+	Adapter string `json:"adapter"`
+	Virtual bool   `json:"virtual"`
+	score   int
+}
+
+var virtualWords = []string{"virtual", "vethernet", "hyper-v", "vmware", "vbox", "virtualbox", "wsl", "docker",
+	"vpn", "tap", "tun", "tailscale", "zerotier", "hamachi", "loopback", "bluetooth", "npcap", "pseudo", "teredo", "isatap"}
+
+func lanAddrs() []netAddr {
+	var out []netAddr
 	ifaces, _ := net.Interfaces()
 	for _, ifc := range ifaces {
 		if ifc.Flags&net.FlagUp == 0 || ifc.Flags&net.FlagLoopback != 0 {
 			continue
+		}
+		name := strings.ToLower(ifc.Name)
+		virtual := false
+		for _, w := range virtualWords {
+			if strings.Contains(name, w) {
+				virtual = true
+			}
 		}
 		addrs, _ := ifc.Addrs()
 		for _, a := range addrs {
@@ -124,10 +144,38 @@ func lanIPs() []net.IP {
 			case *net.IPAddr:
 				ip = v.IP
 			}
-			if ip4 := ip.To4(); ip4 != nil && ip4.IsPrivate() {
-				out = append(out, ip4)
+			ip4 := ip.To4()
+			if ip4 == nil || !ip4.IsPrivate() {
+				continue
 			}
+			sc := 0
+			if strings.Contains(name, "wi-fi") || strings.Contains(name, "wifi") || strings.Contains(name, "wlan") || strings.Contains(name, "wireless") {
+				sc += 4
+			} else if strings.Contains(name, "ethernet") || strings.HasPrefix(name, "eth") || strings.HasPrefix(name, "en") {
+				sc += 3
+			}
+			if virtual {
+				sc -= 10
+			}
+			switch {
+			case ip4[0] == 192 && ip4[1] == 168:
+				sc += 2
+			case ip4[0] == 10:
+				sc += 1
+			case ip4[0] == 172:
+				sc -= 1 // often WSL / Hyper-V / Docker
+			}
+			out = append(out, netAddr{IP: ip4.String(), Adapter: ifc.Name, Virtual: virtual, score: sc})
 		}
+	}
+	sort.SliceStable(out, func(i, j int) bool { return out[i].score > out[j].score })
+	return out
+}
+
+func lanIPs() []net.IP {
+	var out []net.IP
+	for _, a := range lanAddrs() {
+		out = append(out, net.ParseIP(a.IP).To4())
 	}
 	return out
 }
