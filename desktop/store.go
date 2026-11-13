@@ -36,6 +36,9 @@ type Receipt struct {
 	// Set when the receipt has been put in a PDF (to avoid putting it in twice)
 	PdfAt   int64  `json:"pdfAt,omitempty"`
 	PdfName string `json:"pdfName,omitempty"`
+	// Receipts added on the computer: "computer"; the original file (e.g. a PDF) is kept
+	Source   string `json:"source,omitempty"`
+	Original string `json:"original,omitempty"`
 }
 
 type Device struct {
@@ -95,6 +98,9 @@ func (s *Store) save() error {
 }
 
 func (s *Store) imagePath(id string) string { return filepath.Join(s.dir, "images", id+".jpg") }
+func (s *Store) originalPath(id, ext string) string {
+	return filepath.Join(s.dir, "originals", id+ext)
+}
 
 func cleanList(in []string) []string {
 	seen := map[string]bool{}

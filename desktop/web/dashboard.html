@@ -74,6 +74,17 @@ input[type=checkbox]{width:17px;height:17px;accent-color:var(--accent)}
 .ok{color:var(--good);font-weight:600}.bad{color:var(--bad);font-weight:600}
 .toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#222;color:#fff;padding:10px 16px;border-radius:10px;z-index:50}
 .hidden{display:none!important}
+.addcard{display:grid;grid-template-columns:120px 1fr auto;gap:14px;border:1px solid var(--line);border-radius:10px;padding:12px;margin-bottom:10px;align-items:start}
+.addcard img{width:120px;max-height:170px;object-fit:contain;background:#fff;border:1px solid var(--line);border-radius:6px}
+.addcard .ag{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:8px 12px}
+.addcard .ag label{font-size:12px;font-weight:600;color:var(--muted);display:block}
+.addcard .ag input{width:100%;margin-top:2px}
+.addcard .ag .wide{grid-column:1/-1}
+.addcard .af{font-weight:600;margin-bottom:6px;word-break:break-all}
+.addcard .ast{font-size:13px;color:var(--accent);margin-bottom:8px}
+.addcard.busy{opacity:.6}
+.drophint{position:fixed;inset:12px;border:3px dashed var(--accent);border-radius:16px;background:rgba(31,111,235,.08);display:flex;align-items:center;justify-content:center;font-size:22px;font-weight:600;color:var(--accent);z-index:60;pointer-events:none}
+.tag.pc{background:var(--soft);color:var(--accent);display:inline-block;margin-top:3px;margin-right:4px}
 .menuwrap{position:relative}
 .menubtn{font-size:18px;line-height:1;padding:7px 12px}
 .menu{position:absolute;right:0;top:calc(100% + 6px);z-index:40;min-width:250px;background:var(--card);border:1px solid var(--line);border-radius:10px;box-shadow:0 10px 30px rgba(0,0,0,.18);padding:6px;display:flex;flex-direction:column}
@@ -138,6 +149,7 @@ tr.picked td{background:var(--soft)}
 <div id="tabReceipts">
 <section class="card" id="viewFolders">
   <h2>📁 Customers <span class="muted">Each customer's receipts and what they owe. Click a folder to open it.</span>
+    <button id="bAddTop" title="Add receipt pictures or PDFs from this computer">⬆ Add receipts…</button>
     <input type="search" id="custSearch" placeholder="🔍 Find a customer" style="margin-left:auto;font-weight:400;font-size:14px;min-width:220px"></h2>
   <div class="fgrid" id="folderGrid"></div>
   <p class="muted" style="margin:14px 0 0">All receipts: <b id="grand" style="color:var(--text)"></b> · <span id="grandSub"></span></p>
@@ -145,7 +157,8 @@ tr.picked td{background:var(--soft)}
 
 <section class="card hidden" id="viewCustomer">
   <div class="row" style="justify-content:space-between;margin-bottom:12px">
-    <div class="row"><button id="bBack">‹ All customers</button><h2 style="margin:0 0 0 6px" id="custTitle"></h2></div>
+    <div class="row"><button id="bBack">‹ All customers</button><h2 style="margin:0 0 0 6px" id="custTitle"></h2>
+      <button id="bAdd" title="Add receipt pictures or PDFs to this folder (or drag files onto this page)">⬆ Add receipts…</button></div>
     <div class="big" id="custTotal" style="font-size:22px"></div>
   </div>
   <div class="row" style="margin-bottom:10px">
@@ -162,6 +175,7 @@ tr.picked td{background:var(--soft)}
     <span style="flex:1"></span>
     <label class="muted">Receipts per page <select id="perPage"><option value="1">1</option><option value="2" selected>2</option><option value="4">4</option><option value="6">6</option></select></label>
     <label class="check muted" title="When saving to a folder, also save a list of the receipts that opens in Excel"><input type="checkbox" id="cSummary" checked> Summary list (folder)</label>
+    <button id="bAssign" title="Move the ticked receipts to a customer">👤 Assign customer…</button>
     <button class="primary" id="bPDF">📄 Make PDF…</button>
     <button id="bSaveSel" title="Copy the scans (and a summary list) into a folder">💾 Save to folder…</button>
   </div>
@@ -277,10 +291,27 @@ tr.picked td{background:var(--soft)}
   <div class="df"><button type="button" class="danger" id="bQuit">Stop the program</button><button type="button" class="primary" data-close>Done</button></div>
 </dialog>
 
+<!-- add receipts from the computer -->
+<dialog id="dAdd"><div class="dh"><h3 id="addTitle">⬆ Add receipts</h3><button type="button" class="small" data-close>✕</button></div>
+  <div class="db"><p class="muted" style="margin-top:0">The date, total and payee are read automatically. Check each receipt, then click <b>Save receipts</b>.</p>
+    <div id="addList"></div></div>
+  <div class="df"><button type="button" id="addMore">+ Add more files…</button><div class="row"><button type="button" data-close>Cancel</button><button type="button" class="primary" id="addSave">Save receipts</button></div></div>
+</dialog>
+<input type="file" id="addFiles" accept="image/jpeg,image/png,image/webp,image/gif,image/bmp,.pdf,application/pdf" multiple class="hidden">
+<div id="dropHint" class="drophint hidden">Drop receipt pictures or PDFs to add them</div>
+<!-- assign customer -->
+<dialog id="dAssign" class="narrow"><div class="dh"><h3>👤 Assign customer</h3><button type="button" class="small" data-close>✕</button></div>
+  <div class="db"><p id="assignInfo" class="muted" style="margin-top:0"></p>
+    <div class="field"><label for="assignCust">Customer</label><input type="text" id="assignCust" list="custList" autocomplete="off" placeholder="Leave empty for “No customer yet”"></div>
+    <div id="assignWarn" class="muted"></div></div>
+  <div class="df"><span></span><div class="row"><button type="button" data-close>Cancel</button><button type="button" class="primary" id="assignSave">Move receipts</button></div></div>
+</dialog>
 <datalist id="payeeList"></datalist><datalist id="custList"></datalist><datalist id="catList"></datalist>
 <div class="toast hidden" id="toast"></div>
 <script src="/assets/qbimport.js"></script>
 <script src="/assets/receiptpdf.js"></script>
+<script src="/assets/parse.js"></script>
+<script src="/assets/scan.js"></script>
 
 <script>
 'use strict';
@@ -370,7 +401,7 @@ function filtered() {
 }
 function renderCustomer() {
   const all = custRows();
-  if (curCust !== '(all)' && curCust !== '(none)' && !all.length) { $('bBack').click(); return; }
+  if (curCust !== '(all)' && !all.length) { $('bBack').click(); return; }   // folder is empty now (e.g. everything was moved)
   $('custTitle').textContent = (curCust === '(all)' ? '🗂 All receipts' : curCust === '(none)' ? '📂 No customer yet' : '📁 ' + curCust);
   $('custTotal').textContent = money(sumOf(all));
   const ids = new Set(S.receipts.map(r => r.id));
@@ -385,6 +416,7 @@ function renderCustomer() {
       el('td', { class: 'thumb' }, r.hasImage ? el('img', { src: `/img/${r.id}.jpg?v=${r.received}`, alt: '', loading: 'lazy' }) : ''),
       el('td', { text: fmtDate(r.date), style: 'white-space:nowrap' }),
       el('td', null, r.payee || r.memo || '', curCust === '(all)' && r.customer ? el('div', { class: 'muted', text: r.customer }) : null,
+        r.original === 'pdf' ? el('span', { class: 'tag pc', text: 'PDF', title: 'Added on this computer from a PDF' }) : null,
         r.pdfAt ? el('div', null, el('span', { class: 'tag pdf', text: '📄 In PDF ' + new Date(r.pdfAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }), title: `Put in a PDF on ${new Date(r.pdfAt).toLocaleString()}${r.pdfName ? ': ' + r.pdfName : ''}` })) : null),
       el('td', { text: r.category || '' }),
       el('td', { class: 'amt', text: money(r.total) }), el('td', { class: 'muted', text: r.note || '' }));
@@ -401,7 +433,7 @@ function renderCustomer() {
 function selSum() {
   const rs = filtered(), pick = S.receipts.filter(r => selected.has(r.id));
   $('selSum').textContent = pick.length ? `${plural(pick.length, 'receipt')} selected · ${money(sumOf(pick))}` : 'Tick the receipts you want.';
-  $('bSaveSel').disabled = !pick.length; $('bPDF').disabled = !pick.length;
+  $('bSaveSel').disabled = !pick.length; $('bPDF').disabled = !pick.length; $('bAssign').disabled = !pick.length;
   const vis = rs.filter(r => selected.has(r.id)).length;
   $('cHead').checked = rs.length > 0 && vis === rs.length; $('cHead').indeterminate = vis > 0 && vis < rs.length;
 }
@@ -524,6 +556,175 @@ $('loadFile').onchange = async e => {
   withConverter(w => w.KKApplySettings(data, f.name));
 };
 
+/* ---------- add receipts from this computer (pictures or PDFs) ---------- */
+let pdfLib = null;
+async function getPDFLib() {
+  if (!pdfLib) { pdfLib = await import('/assets/vendor/pdf.min.mjs'); pdfLib.GlobalWorkerOptions.workerSrc = '/assets/vendor/pdf.worker.min.mjs'; }
+  return pdfLib;
+}
+const todayISO = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
+async function fileToReceipt(file) {
+  const isPdf = /\.pdf$/i.test(file.name) || file.type === 'application/pdf';
+  let canvas, text = '';
+  if (isPdf) {
+    const lib = await getPDFLib();
+    const doc = await lib.getDocument({ data: new Uint8Array(await file.arrayBuffer()), isEvalSupported: false }).promise;
+    const parts = [];
+    for (let n = 1; n <= Math.min(doc.numPages, 6); n++) {
+      const page = await doc.getPage(n), vp1 = page.getViewport({ scale: 1 });
+      const vp = page.getViewport({ scale: Math.min(2.5, 1500 / vp1.width) });
+      const c = document.createElement('canvas'); c.width = Math.ceil(vp.width); c.height = Math.ceil(vp.height);
+      const ctx = c.getContext('2d'); ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, c.width, c.height);
+      await page.render({ canvasContext: ctx, viewport: vp }).promise;
+      parts.push(c);
+      const tc = await page.getTextContent(), lines = [];
+      tc.items.filter(i => i.str && i.str.trim()).sort((a, b) => b.transform[5] - a.transform[5] || a.transform[4] - b.transform[4]).forEach(i => {
+        const l = lines.find(x => Math.abs(x.y - i.transform[5]) < 3); if (l) l.t.push(i.str); else lines.push({ y: i.transform[5], t: [i.str] });
+      });
+      text += lines.map(l => l.t.join(' ')).join('\n') + '\n';
+    }
+    canvas = document.createElement('canvas');
+    canvas.width = Math.max(...parts.map(c => c.width)); canvas.height = parts.reduce((h, c) => h + c.height, 0);
+    const ctx = canvas.getContext('2d'); ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, canvas.width, canvas.height);
+    let y = 0; parts.forEach(c => { ctx.drawImage(c, 0, y); y += c.height; });
+  } else {
+    const bmp = await createImageBitmap(file);
+    const k = Math.min(1, 2400 / Math.max(bmp.width, bmp.height));
+    canvas = document.createElement('canvas'); canvas.width = Math.round(bmp.width * k); canvas.height = Math.round(bmp.height * k);
+    const ctx = canvas.getContext('2d'); ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.drawImage(bmp, 0, 0, canvas.width, canvas.height);
+  }
+  const jpeg = await new Promise(res => canvas.toBlob(res, 'image/jpeg', 0.85));
+  const t = document.createElement('canvas'), tk = 240 / Math.max(canvas.width, canvas.height);
+  t.width = Math.max(1, Math.round(canvas.width * tk)); t.height = Math.max(1, Math.round(canvas.height * tk));
+  t.getContext('2d').drawImage(canvas, 0, 0, t.width, t.height);
+  if (!isPdf || !norm(text)) {      // pictures (or scanned PDFs with no text): read them like the phone does
+    try {
+      // read a straightened black & white copy (like the phone does); the picture itself is saved unchanged
+      let src = canvas;
+      if (!isPdf) { try { src = Scan.process(canvas, Scan.detectCorners(canvas), 'bw'); } catch (e) { src = canvas; } }
+      text = (await (await ocrWorker()).recognize(src)).data.text || '';
+      if (!Parse.receipt(text, S.payees, S.useNames !== false).total && src !== canvas) text = (await (await ocrWorker()).recognize(canvas)).data.text || text;
+    } catch (e) { text = ''; }
+  }
+  const got = text ? Parse.receipt(text, S.payees, S.useNames !== false) : {};
+  return { file, isPdf, jpeg, thumb: t.toDataURL('image/jpeg', 0.8), got, text };
+}
+/* the same receipt reader the phone uses (Tesseract), built into this program */
+let ocrP = null;
+function ocrWorker() {
+  if (!ocrP) {
+    ocrP = new Promise((res, rej) => {
+      const s = document.createElement('script'); s.src = '/assets/vendor/tesseract/tesseract.min.js';
+      s.onload = () => Tesseract.createWorker('eng', 1, { workerPath: '/assets/vendor/tesseract/worker.min.js', corePath: '/assets/vendor/tesseract/core',
+        langPath: '/assets/vendor/tesseract/lang', gzip: true, workerBlobURL: false, cacheMethod: 'none' }).then(res, rej);
+      s.onerror = rej; document.head.append(s);
+    }).catch(e => { ocrP = null; throw e; });
+  }
+  return ocrP;
+}
+let addTarget = '';     // customer the new receipts go to
+function openAdd(target) {
+  addTarget = target || '';
+  $('addList').innerHTML = '';
+  $('addTitle').textContent = '⬆ Add receipts' + (addTarget ? ' to ' + addTarget : '');
+  $('addFiles').click();
+}
+$('bAddTop').onclick = () => openAdd('');
+$('bAdd').onclick = () => openAdd(curCust && curCust !== '(all)' && curCust !== '(none)' ? curCust : '');
+$('addMore').onclick = () => $('addFiles').click();
+$('addFiles').onchange = e => { const fs = [...e.target.files]; e.target.value = ''; if (fs.length) addFiles(fs); };
+async function addFiles(files) {
+  if (!$('dAdd').open) $('dAdd').showModal();
+  for (const f of files) {
+    const card = el('div', { class: 'addcard busy' }, el('img', { alt: '' }), el('div', null, el('div', { class: 'af', text: f.name }), el('div', { class: 'ast', text: 'Reading…' })));
+    $('addList').append(card);
+    try { card._r = await fileToReceipt(f); fillCard(card); }
+    catch (err) { card.querySelector('.ast').textContent = "Couldn't open this file: " + err.message; card.classList.remove('busy'); card._bad = true; }
+  }
+}
+function fillCard(card) {
+  const r = card._r, g = r.got || {};
+  card.classList.remove('busy');
+  card.querySelector('img').src = r.thumb;
+  const found = ['date', 'total', 'payee'].filter(k => g[k] != null && g[k] !== '');
+  card.querySelector('.ast').textContent = found.length ? `✓ Read the ${found.join(', ')}. Please check.` : "Couldn't read this receipt clearly. Please fill it in.";
+  const inp = (label, type, value, list, cls) => {
+    const i = el('input', { type, autocomplete: 'off' }); i.value = value == null ? '' : value; if (list) i.setAttribute('list', list);
+    const l = el('label', cls ? { class: cls } : null, label, i); return [l, i];
+  };
+  const [lDate, iDate] = inp('Date', 'date', g.date || todayISO());
+  const [lTot, iTot] = inp('Total ($)', 'text', g.total != null ? Number(g.total).toFixed(2) : '');
+  const [lPay, iPay] = inp('Payee', 'text', g.payee || '', 'payeeList');
+  const [lCus, iCus] = inp('Customer', 'text', addTarget, 'custList');
+  const [lCat, iCat] = inp('Category', 'text', 'Uncategorized Expenses', 'catList');
+  const [lNote, iNote] = inp('Note', 'text', '', null, 'wide');
+  iTot.inputMode = 'decimal'; iCus.placeholder = '(No customer yet)';
+  if (!g.payee && g.store) iPay.placeholder = 'On the receipt: ' + g.store;
+  Object.assign(card, { iDate, iTot, iPay, iCus, iCat, iNote });
+  const rm = el('button', { class: 'small', type: 'button', text: '✕', title: 'Don\'t add this one' }); rm.onclick = () => card.remove();
+  card.children[1].append(el('div', { class: 'ag' }, lDate, lTot, lPay, lCus, lCat, lNote));
+  card.append(rm);
+}
+$('addSave').onclick = async () => {
+  const cards = [...$('addList').children].filter(c => c._r && !c._bad);
+  if (!cards.length) { $('dAdd').close(); return; }
+  for (const c of cards) { const t = norm(c.iTot.value).replace(/[$,\s]/g, ''); if (t && isNaN(parseFloat(t))) { alert(`"${c._r.file.name}": the total should be a number, like 17.81`); c.iTot.focus(); return; } }
+  $('addSave').disabled = true;
+  let n = 0;
+  try {
+    for (const c of cards) {
+      const t = norm(c.iTot.value).replace(/[$,\s]/g, '');
+      const payee = canon(S.payees.map(p => p.name), c.iPay.value);
+      const meta = { date: c.iDate.value || todayISO(), total: t ? Math.round(parseFloat(t) * 100) / 100 : null, payee, memo: payee,
+        customer: canon(S.customers, c.iCus.value), category: canon(S.categories, c.iCat.value), note: norm(c.iNote.value), ocrText: c._r.text || '' };
+      const fd = new FormData();
+      fd.append('meta', JSON.stringify(meta));
+      fd.append('image', c._r.jpeg, 'receipt.jpg');
+      if (c._r.isPdf) { fd.append('original', c._r.file, c._r.file.name); fd.append('originalName', c._r.file.name); }
+      const r = await fetch('/local/upload', { method: 'POST', headers: { 'X-KK': '1' }, body: fd });
+      if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || r.status);
+      c.remove(); n++;
+    }
+    $('dAdd').close(); toast(`Added ${plural(n, 'receipt')} ✓`); sig = ''; await refresh();
+  } catch (e) { alert(`Saved ${n}, then stopped: ${e.message}`); }
+  finally { $('addSave').disabled = false; }
+};
+// drag & drop files anywhere on the Receipts tab
+let dragDepth = 0;
+const isFileDrag = e => [...(e.dataTransfer?.types || [])].includes('Files');
+window.addEventListener('dragenter', e => { if (!isFileDrag(e) || $('tabReceipts').classList.contains('hidden')) return; dragDepth++; $('dropHint').classList.remove('hidden'); });
+window.addEventListener('dragleave', e => { if (!isFileDrag(e)) return; if (--dragDepth <= 0) { dragDepth = 0; $('dropHint').classList.add('hidden'); } });
+window.addEventListener('dragover', e => { if (isFileDrag(e)) e.preventDefault(); });
+window.addEventListener('drop', e => {
+  if (!isFileDrag(e)) return; e.preventDefault(); dragDepth = 0; $('dropHint').classList.add('hidden');
+  if ($('tabReceipts').classList.contains('hidden')) return;
+  const fs = [...e.dataTransfer.files].filter(f => /\.(pdf|jpe?g|png|webp|gif|bmp)$/i.test(f.name) || /^image\//.test(f.type));
+  if (!fs.length) return;
+  if (!$('dAdd').open) { addTarget = curCust && curCust !== '(all)' && curCust !== '(none)' ? curCust : ''; $('addList').innerHTML = ''; $('addTitle').textContent = '⬆ Add receipts' + (addTarget ? ' to ' + addTarget : ''); }
+  addFiles(fs);
+});
+
+/* ---------- assign a customer to the ticked receipts ---------- */
+$('bAssign').onclick = () => {
+  const n = selected.size; if (!n) return;
+  $('assignInfo').textContent = `Move ${plural(n, 'ticked receipt')} to:`;
+  $('assignCust').value = ''; $('assignWarn').textContent = '';
+  $('dAssign').showModal(); $('assignCust').focus();
+};
+$('assignCust').addEventListener('input', () => {
+  const v = norm($('assignCust').value);
+  $('assignWarn').textContent = v && !S.customers.some(c => lc(c) === lc(v)) ? '⚠ Not on your customer list. It will be added, so check the spelling matches QuickBooks.' : '';
+});
+$('assignSave').onclick = async () => {
+  const cust = canon(S.customers, $('assignCust').value);
+  try {
+    await post('/local/assign', { ids: [...selected], customer: cust });
+    $('dAssign').close(); toast(`Moved ${plural(selected.size, 'receipt')} to ${cust || 'No customer yet'} ✓`);
+    selected.clear(); sig = ''; await refresh();
+  } catch (e) { alert(e.message); }
+};
+
 function msgSave(kind, text) {
   const m = $('saveMsg'); m.innerHTML = '';
   if (text) m.append(el('div', { class: 'savemsg ' + kind, text }));
@@ -539,6 +740,8 @@ function openRec(r) {
   $('recMeta').textContent = `Scanned ${new Date(r.created).toLocaleString()} · received ${new Date(r.received).toLocaleString()}` +
     (r.pdfAt ? ` · 📄 put in a PDF ${new Date(r.pdfAt).toLocaleString()}${r.pdfName ? ' (' + r.pdfName + ')' : ''}` : '');
   $('recUnPdf').classList.toggle('hidden', !r.pdfAt);
+  if (r.source === 'computer') $('recMeta').textContent = $('recMeta').textContent.replace(/^Scanned .*? · received/, 'Added on this computer');
+  if (r.original === 'pdf') { $('recMeta').append(' · ', el('a', { href: `/orig/${r.id}.pdf`, target: '_blank', text: '📄 Open original PDF' })); }
   $('recOcr').textContent = r.ocrText || '(none)';
   editing.memoManual = !!r.memoManual;
   $('dRec').showModal();

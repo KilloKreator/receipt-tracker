@@ -34,7 +34,7 @@ import (
 )
 
 const (
-	appVersion = "0.2.4"
+	appVersion = "0.2.5"
 	httpPort   = 8780 // dashboard + phone setup page
 	httpsPort  = 8443 // phone sync
 	phoneApp   = "https://killokreator.github.io/receipt-tracker/"
@@ -502,6 +502,81 @@ func localSite() http.Handler {
 		w.Header().Set("Content-Type", "image/png")
 		w.Write(png)
 	}))
+	// Receipts added on the computer (a picture or PDF turned into a scan, plus the original file)
+	mux.HandleFunc("/local/upload", local(func(w http.ResponseWriter, r *http.Request) {
+		r.Body = http.MaxBytesReader(w, r.Body, 60<<20)
+		if err := r.ParseMultipartForm(64 << 20); err != nil {
+			jsonErr(w, 400, "upload too big or broken")
+			return
+		}
+		var rec Receipt
+		if err := json.Unmarshal([]byte(r.FormValue("meta")), &rec); err != nil {
+			jsonErr(w, 400, "bad receipt")
+			return
+		}
+		rec.ID = "pc-" + randToken()[:20]
+		now := time.Now().UnixMilli()
+		rec.Created, rec.Updated, rec.Received, rec.Source = now, now, now, "computer"
+		rec.PdfAt, rec.PdfName = 0, ""
+		if rec.Memo == "" {
+			rec.Memo = rec.Payee
+		}
+		save := func(field, path string) (bool, error) {
+			f, _, err := r.FormFile(field)
+			if err != nil {
+				return false, nil
+			}
+			defer f.Close()
+			os.MkdirAll(filepath.Dir(path), 0755)
+			out, err := os.Create(path + ".tmp")
+			if err != nil {
+				return false, err
+			}
+			_, err = io.Copy(out, f)
+			out.Close()
+			if err == nil {
+				err = os.Rename(path+".tmp", path)
+			}
+			return err == nil, err
+		}
+		ok, err := save("image", store.imagePath(rec.ID))
+		if err != nil {
+			jsonErr(w, 500, "could not save: "+err.Error())
+			return
+		}
+		rec.HasImage = ok
+		rec.Original = ""
+		if ext := strings.ToLower(filepath.Ext(r.FormValue("originalName"))); ext == ".pdf" {
+			if ok, _ := save("original", store.originalPath(rec.ID, ".pdf")); ok {
+				rec.Original = "pdf"
+			}
+		}
+		store.mu.Lock()
+		store.data.Receipts = append(store.data.Receipts, &rec)
+		if rec.Customer != "" {
+			store.data.Customers = cleanList(append(store.data.Customers, rec.Customer))
+		}
+		if rec.Category != "" {
+			store.data.Categories = cleanList(append(store.data.Categories, rec.Category))
+		}
+		err = store.save()
+		store.mu.Unlock()
+		if err != nil {
+			jsonErr(w, 500, err.Error())
+			return
+		}
+		log.Printf("added receipt %s on the computer (%s, %s)", rec.ID, rec.Payee, rec.Customer)
+		writeJSON(w, 200, map[string]string{"id": rec.ID})
+	}))
+	mux.HandleFunc("/orig/", local(func(w http.ResponseWriter, r *http.Request) {
+		id := strings.TrimSuffix(strings.TrimPrefix(r.URL.Path, "/orig/"), ".pdf")
+		if !idRe.MatchString(id) {
+			http.NotFound(w, r)
+			return
+		}
+		w.Header().Set("Content-Type", "application/pdf")
+		http.ServeFile(w, r, store.originalPath(id, ".pdf"))
+	}))
 	mux.HandleFunc("/img/", local(func(w http.ResponseWriter, r *http.Request) {
 		id := strings.TrimSuffix(strings.TrimPrefix(r.URL.Path, "/img/"), ".jpg")
 		if !idRe.MatchString(id) {
@@ -609,6 +684,33 @@ func localSite() http.Handler {
 		}
 		writeJSON(w, 200, map[string]bool{"ok": true})
 	}))
+	mux.HandleFunc("/local/assign", local(func(w http.ResponseWriter, r *http.Request) {
+		var in struct {
+			IDs      []string
+			Customer string
+		}
+		if json.NewDecoder(io.LimitReader(r.Body, 1<<20)).Decode(&in) != nil {
+			jsonErr(w, 400, "bad request")
+			return
+		}
+		cust := strings.Join(strings.Fields(in.Customer), " ")
+		store.mu.Lock()
+		defer store.mu.Unlock()
+		now := time.Now().UnixMilli()
+		for _, id := range in.IDs {
+			if rec := store.findReceipt(id); rec != nil {
+				rec.Customer, rec.Updated = cust, now
+			}
+		}
+		if cust != "" {
+			store.data.Customers = cleanList(append(store.data.Customers, cust))
+		}
+		if err := store.save(); err != nil {
+			jsonErr(w, 500, err.Error())
+			return
+		}
+		writeJSON(w, 200, map[string]bool{"ok": true})
+	}))
 	mux.HandleFunc("/local/delete", local(func(w http.ResponseWriter, r *http.Request) {
 		var in struct{ ID string }
 		if json.NewDecoder(io.LimitReader(r.Body, 4096)).Decode(&in) != nil || !idRe.MatchString(in.ID) {
@@ -627,6 +729,7 @@ func localSite() http.Handler {
 		// keep the photo in a "deleted" folder, just in case
 		os.MkdirAll(filepath.Join(store.dir, "deleted"), 0755)
 		os.Rename(store.imagePath(in.ID), filepath.Join(store.dir, "deleted", in.ID+".jpg"))
+		os.Rename(store.originalPath(in.ID, ".pdf"), filepath.Join(store.dir, "deleted", in.ID+".pdf"))
 		if err := store.save(); err != nil {
 			jsonErr(w, 500, err.Error())
 			return
