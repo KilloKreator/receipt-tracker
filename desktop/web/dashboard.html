@@ -1,0 +1,407 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>KellerKraft Receipts</title>
+<style>
+:root{--bg:#f4f6f8;--card:#fff;--text:#1d2329;--muted:#5d6873;--line:#dde2e7;--accent:#1f6feb;--accent-text:#fff;--soft:#e7f0fd;
+  --good:#1a7f37;--good-soft:#e6f4ea;--warn:#9a6700;--warn-soft:#fff4d6;--bad:#c62828;--bad-soft:#fdecec;--input:#fff}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#15191d;--card:#1e2328;--text:#e6e9ec;--muted:#9aa5b0;--line:#323a42;--accent:#4c8dff;--accent-text:#0b1220;--soft:#1c2a40;
+  --good:#4cc26b;--good-soft:#16301e;--warn:#e3b341;--warn-soft:#3a2f12;--bad:#ff6b6b;--bad-soft:#3a1c1c;--input:#15191d}}
+:root[data-theme="dark"]{--bg:#15191d;--card:#1e2328;--text:#e6e9ec;--muted:#9aa5b0;--line:#323a42;--accent:#4c8dff;--accent-text:#0b1220;--soft:#1c2a40;
+  --good:#4cc26b;--good-soft:#16301e;--warn:#e3b341;--warn-soft:#3a2f12;--bad:#ff6b6b;--bad-soft:#3a1c1c;--input:#15191d}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font:15px/1.45 "Segoe UI",system-ui,-apple-system,Roboto,Arial,sans-serif}
+.wrap{max-width:1400px;margin:0 auto;padding:20px 16px 60px}
+header{display:flex;flex-wrap:wrap;gap:12px;align-items:flex-start;justify-content:space-between;margin-bottom:16px}
+h1{font-size:24px;margin:0}.sub{color:var(--accent);font-weight:600}
+.quote{font-style:italic;color:var(--muted);font-size:14px;margin-top:2px}
+.tools{display:flex;flex-direction:column;align-items:flex-end;gap:8px}
+.row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+button,.btn{font:inherit;border:1px solid var(--line);background:var(--card);color:var(--text);padding:7px 13px;border-radius:7px;cursor:pointer;text-decoration:none}
+button:hover,.btn:hover{border-color:var(--accent)}
+button.primary{background:var(--accent);color:var(--accent-text);border-color:var(--accent);font-weight:600}
+button.danger{color:var(--bad)}
+button.small{padding:3px 9px;font-size:13px}
+.pill{display:inline-flex;align-items:center;gap:6px;font-size:13px;padding:4px 11px;border-radius:999px;background:var(--good-soft);color:var(--good);font-weight:600}
+.pill.warn{background:var(--warn-soft);color:var(--warn)}
+.card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:16px;margin-bottom:14px}
+.card h2{font-size:17px;margin:0 0 12px;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.muted{color:var(--muted);font-size:13px}
+input[type=text],input[type=date],input[type=search],select,textarea{font:inherit;color:var(--text);background:var(--input);border:1px solid var(--line);border-radius:7px;padding:7px 9px;min-width:0}
+textarea{width:100%;font:13px/1.5 Consolas,"Courier New",monospace}
+input:focus,select:focus,textarea:focus,button:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+.table-wrap{overflow-x:auto;border:1px solid var(--line);border-radius:8px}
+table{border-collapse:collapse;width:100%;font-size:14px}
+th,td{padding:8px 10px;border-bottom:1px solid var(--line);text-align:left;vertical-align:middle}
+th{background:var(--bg);font-weight:600;white-space:nowrap}
+tr.click{cursor:pointer}tr.click:hover td{background:var(--soft)}
+tr.sel td{background:var(--soft)}
+td.amt,th.amt{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+td.thumb img{width:38px;height:50px;object-fit:cover;border-radius:4px;border:1px solid var(--line);display:block;background:#ddd}
+tfoot td{font-weight:700;background:var(--bg)}
+.owed{display:grid;grid-template-columns:minmax(280px,420px) 1fr;gap:14px}
+@media (max-width:900px){.owed{grid-template-columns:1fr}}
+.big{font-size:28px;font-weight:700;font-variant-numeric:tabular-nums}
+.empty{padding:28px;text-align:center;color:var(--muted)}
+.tag{font-size:12px;padding:1px 8px;border-radius:999px;background:var(--soft);color:var(--accent);white-space:nowrap}
+.tag.none{background:var(--warn-soft);color:var(--warn)}
+dialog{border:1px solid var(--line);border-radius:12px;background:var(--card);color:var(--text);padding:0;width:min(980px,calc(100vw - 24px));max-height:calc(100vh - 40px)}
+dialog.narrow{width:min(620px,calc(100vw - 24px))}
+dialog::backdrop{background:rgba(0,0,0,.45)}
+.dh{display:flex;justify-content:space-between;align-items:center;padding:14px 18px;border-bottom:1px solid var(--line)}
+.dh h3{margin:0;font-size:17px}
+.db{padding:16px 18px;overflow:auto;max-height:calc(100vh - 170px)}
+.df{display:flex;justify-content:space-between;gap:8px;padding:12px 18px;border-top:1px solid var(--line);flex-wrap:wrap}
+.rgrid{display:grid;grid-template-columns:minmax(260px,1fr) minmax(280px,1fr);gap:18px}
+@media (max-width:760px){.rgrid{grid-template-columns:1fr}}
+.rimg{background:#222;border-radius:8px;text-align:center;padding:6px}
+.rimg img{max-width:100%;max-height:62vh;cursor:zoom-in}
+.field{margin-bottom:12px}.field label{display:block;font-weight:600;margin-bottom:4px;font-size:14px}
+.field input,.field select,.field textarea{width:100%}
+.code{font-size:40px;font-weight:800;letter-spacing:6px;font-variant-numeric:tabular-nums}
+.setup{display:grid;grid-template-columns:auto 1fr;gap:18px;align-items:start}
+@media (max-width:640px){.setup{grid-template-columns:1fr}}
+.qr{background:#fff;padding:8px;border-radius:8px;border:1px solid var(--line)}
+ol li{margin:6px 0}
+.tabs{display:flex;gap:4px;border-bottom:1px solid var(--line);padding:10px 18px 0}
+.tab{border:1px solid transparent;border-bottom:none;border-radius:8px 8px 0 0;background:none;padding:8px 14px;font-weight:600;color:var(--muted);margin-bottom:-1px}
+.tab.on{border-color:var(--line);background:var(--card);color:var(--accent);box-shadow:inset 0 3px 0 var(--accent)}
+.pane{display:none}.pane.on{display:block}
+label.check{display:inline-flex;gap:8px;align-items:center;cursor:pointer}
+input[type=checkbox]{width:17px;height:17px;accent-color:var(--accent)}
+.toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#222;color:#fff;padding:10px 16px;border-radius:10px;z-index:50}
+.hidden{display:none!important}
+.newflash td{animation:flash 2.5s ease-out}
+@keyframes flash{from{background:var(--good-soft)}to{background:transparent}}
+</style></head>
+<body><div class="wrap">
+<header>
+  <div>
+    <h1>KellerKraft Receipts</h1>
+    <div class="sub">Receipt Tracker</div>
+    <div class="quote">“Just looking out for a Pops I love”</div>
+  </div>
+  <div class="tools">
+    <div class="row">
+      <button id="bSetup">📱 Phone setup</button>
+      <button id="bLists">📋 Lists</button>
+      <button id="bSettings">⚙ Settings</button>
+    </div>
+    <span class="pill" id="status">Starting…</span>
+  </div>
+</header>
+
+<section class="card">
+  <h2>💵 Owed by customer <span class="muted">Total of all receipts per customer. Click a customer to see their receipts.</span></h2>
+  <div class="owed">
+    <div class="table-wrap"><table>
+      <thead><tr><th>Customer</th><th class="amt">Receipts</th><th class="amt">Total</th></tr></thead>
+      <tbody id="owedBody"></tbody><tfoot id="owedFoot"></tfoot></table></div>
+    <div>
+      <div class="muted">All receipts</div><div class="big" id="grand">$0.00</div>
+      <div class="muted" id="grandSub"></div>
+    </div>
+  </div>
+</section>
+
+<section class="card">
+  <h2>🧾 Receipts</h2>
+  <div class="row" style="margin-bottom:10px">
+    <select id="fCust"><option value="">All customers</option></select>
+    <label class="muted">From <input type="date" id="fFrom"></label>
+    <label class="muted">To <input type="date" id="fTo"></label>
+    <input type="search" id="fText" placeholder="🔍 Search payee, note…" style="min-width:220px">
+    <button class="small" id="fClear">Clear</button>
+    <span style="flex:1"></span>
+    <span class="muted" id="fSum"></span>
+    <button id="bExport">⬇ Export (CSV / Excel)</button>
+  </div>
+  <div class="table-wrap"><table>
+    <thead><tr><th></th><th>Date</th><th>Customer</th><th>Payee</th><th>Category</th><th class="amt">Total</th><th>Note</th></tr></thead>
+    <tbody id="rBody"></tbody></table></div>
+</section>
+<p class="muted" style="text-align:center" id="foot"></p>
+</div>
+
+<!-- receipt -->
+<dialog id="dRec"><form method="dialog">
+  <div class="dh"><h3 id="recTitle">Receipt</h3><button type="button" class="small" data-close>✕</button></div>
+  <div class="db"><div class="rgrid">
+    <div class="rimg"><img id="recImg" alt="Receipt scan" title="Click to open full size"></div>
+    <div>
+      <div class="field"><label for="eDate">Date</label><input type="date" id="eDate"></div>
+      <div class="field"><label for="eTotal">Total ($)</label><input type="text" id="eTotal" inputmode="decimal"></div>
+      <div class="field"><label for="ePayee">Payee</label><input type="text" id="ePayee" list="payeeList" autocomplete="off"></div>
+      <div class="field"><label for="eMemo">Memo <span class="muted">(same as the payee unless you change it)</span></label><input type="text" id="eMemo"></div>
+      <div class="field"><label for="eCust">Customer</label><input type="text" id="eCust" list="custList" autocomplete="off"></div>
+      <div class="field"><label for="eCat">Category</label><input type="text" id="eCat" list="catList" autocomplete="off"></div>
+      <div class="field"><label for="eNote">Note</label><textarea id="eNote" rows="3" style="font:inherit"></textarea></div>
+      <div class="muted" id="recMeta"></div>
+      <details style="margin-top:8px"><summary class="muted">Text read from the receipt</summary><pre id="recOcr" class="muted" style="white-space:pre-wrap"></pre></details>
+    </div>
+  </div></div>
+  <div class="df"><button type="button" class="danger" id="recDel">Delete receipt</button>
+    <div class="row"><button type="button" data-close>Cancel</button><button type="button" class="primary" id="recSave">Save</button></div></div>
+</form></dialog>
+
+<!-- phone setup -->
+<dialog id="dSetup" class="narrow"><div class="dh"><h3>📱 Phone setup</h3><button type="button" class="small" data-close>✕</button></div>
+  <div class="db">
+    <div class="setup">
+      <img class="qr" id="qr" width="180" height="180" alt="QR code">
+      <div>
+        <ol>
+          <li>On the iPhone, open the <b>Camera</b> and point it at this code (or type <b id="setupUrl"></b> into Safari). The iPhone must be on the same Wi-Fi.</li>
+          <li>Follow the steps on the phone: <b>install the security certificate</b>, then <b>add KK Receipts to the Home Screen</b>.</li>
+          <li>In KK Receipts tap <b>⚙︎</b> and enter:</li>
+        </ol>
+        <div class="muted">Computer address</div><div class="code" id="addrBig" style="font-size:26px;letter-spacing:1px"></div>
+        <div class="muted" style="margin-top:8px">Code</div><div class="code" id="codeBig"></div>
+        <div class="muted" id="codeExp"></div>
+      </div>
+    </div>
+    <p class="muted" id="phonesInfo"></p>
+    <p class="muted">If Windows asked whether to allow KellerKraft Receipts on networks, it must be allowed on <b>Private</b> networks, and your home Wi-Fi must be set to <b>Private</b> in Windows.</p>
+  </div>
+  <div class="df"><button type="button" class="danger" id="bForget">Disconnect all phones</button><div class="row"><button type="button" id="bNewCode">New code</button><button type="button" class="primary" data-close>Done</button></div></div>
+</dialog>
+
+<!-- lists -->
+<dialog id="dLists"><div class="dh"><h3>📋 Lists</h3><button type="button" class="small" data-close>✕</button></div>
+  <div class="tabs"><button class="tab on" data-tab="cust">👤 Customers</button><button class="tab" data-tab="cat">📂 Categories</button><button class="tab" data-tab="pay">🏪 Payees</button></div>
+  <div class="db">
+    <div class="pane on" data-pane="cust">
+      <p class="muted">One customer per line, spelled exactly as in QuickBooks (jobs as <i>Customer:Job</i>). Customers added on the phone appear here after syncing.</p>
+      <textarea id="tCust" rows="16"></textarea>
+    </div>
+    <div class="pane" data-pane="cat">
+      <p class="muted">One category per line, spelled exactly as in your QuickBooks Chart of Accounts, e.g. <i>Job Materials</i> or <i>Automobile:Fuel</i>.</p>
+      <textarea id="tCat" rows="16"></textarea>
+    </div>
+    <div class="pane" data-pane="pay">
+      <p class="muted">One payee per line. Optional auto-select words go after a <b>|</b>, separated by commas, e.g. <code>The Home Depot | HOME DEPOT, HOMEDEPOT</code>.</p>
+      <div class="row" style="margin-bottom:8px">
+        <button type="button" id="bImport">⬆ Import payees from KellerKraft Time Saver…</button>
+        <input type="file" id="importFile" accept=".json,application/json" class="hidden">
+        <label class="check"><input type="checkbox" id="cNames"> Also pick a payee when its name is on the receipt</label>
+      </div>
+      <textarea id="tPay" rows="14"></textarea>
+      <p class="muted">To import: in KellerKraft Time Saver click <b>Back up settings</b>, then choose that file here.</p>
+    </div>
+  </div>
+  <div class="df"><span class="muted">Lists are copied to the phone each time it syncs.</span><div class="row"><button type="button" data-close>Cancel</button><button type="button" class="primary" id="bSaveLists">Save lists</button></div></div>
+</dialog>
+
+<!-- settings -->
+<dialog id="dSettings" class="narrow"><div class="dh"><h3>⚙ Settings</h3><button type="button" class="small" data-close>✕</button></div>
+  <div class="db">
+    <p><label class="check"><input type="checkbox" id="cAuto"> <b>Start automatically with Windows</b></label><br><span class="muted">Recommended, so the phone can sync whenever you're home.</span></p>
+    <p><b>Your receipts are saved in:</b><br><span class="muted" id="dirText"></span><br><button type="button" id="bFolder" style="margin-top:6px">📁 Open folder</button></p>
+    <p class="muted">To back up, copy that whole folder (for example to a USB stick).</p>
+    <p class="muted" id="verText"></p>
+  </div>
+  <div class="df"><button type="button" class="danger" id="bQuit">Stop the program</button><button type="button" class="primary" data-close>Done</button></div>
+</dialog>
+
+<datalist id="payeeList"></datalist><datalist id="custList"></datalist><datalist id="catList"></datalist>
+<div class="toast hidden" id="toast"></div>
+
+<script>
+'use strict';
+const $ = id => document.getElementById(id);
+const norm = s => String(s == null ? '' : s).replace(/\s+/g, ' ').trim();
+const lc = s => norm(s).toLowerCase();
+const money = n => (n == null || isNaN(n)) ? '—' : Number(n).toLocaleString('en-US', { style: 'currency', currency: 'USD' });
+const fmtDate = d => d ? new Date(d + 'T12:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '';
+let S = null, sig = '', editing = null, seenIds = null;
+
+async function get() { const r = await fetch('/local/state', { cache: 'no-store' }); if (!r.ok) throw new Error(r.status); return r.json(); }
+async function post(path, body) {
+  const r = await fetch(path, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-KK': '1' }, body: JSON.stringify(body || {}) });
+  const d = await r.json().catch(() => ({})); if (!r.ok) throw new Error(d.error || r.status); return d;
+}
+let tt; function toast(m) { const t = $('toast'); t.textContent = m; t.classList.remove('hidden'); clearTimeout(tt); tt = setTimeout(() => t.classList.add('hidden'), 3000); }
+function el(tag, props, ...kids) {
+  const e = document.createElement(tag);
+  for (const k in props || {}) { if (k === 'text') e.textContent = props[k]; else if (k === 'class') e.className = props[k]; else if (k.startsWith('on')) e.addEventListener(k.slice(2), props[k]); else e.setAttribute(k, props[k]); }
+  kids.flat().forEach(c => c != null && e.append(c)); return e;
+}
+
+async function refresh() {
+  try { S = await get(); } catch (e) { $('status').textContent = 'Program is not running'; $('status').className = 'pill warn'; return; }
+  const s = JSON.stringify([S.receipts.map(r => r.id + r.updated + r.received), S.customers, S.categories, S.payees, S.ips, S.pairCode]);
+  status();
+  if (s === sig) return;
+  sig = s; render();
+}
+function status() {
+  const st = $('status');
+  if (!S.ips || !S.ips.length) { st.textContent = '⚠ Not on a Wi-Fi network'; st.className = 'pill warn'; }
+  else { st.textContent = `📶 Ready for phone sync · ${S.ips[0]}`; st.className = 'pill'; }
+  if ($('dSetup').open) fillSetup();
+}
+function render() {
+  const fill = (id, arr) => { const d = $(id); d.innerHTML = ''; arr.forEach(v => d.append(el('option', { value: v }))); };
+  fill('payeeList', S.payees.map(p => p.name)); fill('custList', S.customers); fill('catList', S.categories);
+  // customer filter
+  const fc = $('fCust'), keep = fc.value; fc.innerHTML = '';
+  fc.append(el('option', { value: '', text: 'All customers' }), el('option', { value: '(none)', text: '(No customer)' }));
+  const custs = [...new Set(S.customers.concat(S.receipts.map(r => r.customer).filter(Boolean)))].sort((a, b) => a.localeCompare(b));
+  custs.forEach(c => fc.append(el('option', { value: c, text: c })));
+  fc.value = [...fc.options].some(o => o.value === keep) ? keep : '';
+  renderOwed(); renderList();
+  $('foot').textContent = `KellerKraft Receipts ${S.version} · Receipts are saved in ${S.dataDir}`;
+}
+function renderOwed() {
+  const m = new Map();
+  S.receipts.forEach(r => { const k = r.customer || '(none)'; const o = m.get(k) || { n: 0, t: 0 }; o.n++; o.t += r.total || 0; m.set(k, o); });
+  const rows = [...m.entries()].sort((a, b) => (a[0] === '(none)') - (b[0] === '(none)') || b[1].t - a[1].t);
+  const tb = $('owedBody'); tb.innerHTML = '';
+  if (!rows.length) tb.append(el('tr', null, el('td', { colspan: 3, class: 'empty', text: 'No receipts yet. Scan one with the phone and tap Sync.' })));
+  let n = 0, t = 0;
+  rows.forEach(([c, o]) => {
+    n += o.n; t += o.t;
+    const tr = el('tr', { class: 'click' + ($('fCust').value === c ? ' sel' : '') },
+      el('td', null, c === '(none)' ? el('span', { class: 'tag none', text: 'No customer yet' }) : c),
+      el('td', { class: 'amt', text: String(o.n) }), el('td', { class: 'amt', text: money(o.t) }));
+    tr.onclick = () => { $('fCust').value = $('fCust').value === c ? '' : c; renderOwed(); renderList(); };
+    tb.append(tr);
+  });
+  $('owedFoot').innerHTML = '';
+  if (rows.length) $('owedFoot').append(el('tr', null, el('td', { text: 'All customers' }), el('td', { class: 'amt', text: String(n) }), el('td', { class: 'amt', text: money(t) })));
+  $('grand').textContent = money(t);
+  $('grandSub').textContent = `${n} receipt${n === 1 ? '' : 's'} · ${S.devices} phone${S.devices === 1 ? '' : 's'} connected` + (S.lastSync > 0 ? ` · last sync ${new Date(S.lastSync).toLocaleString()}` : '');
+}
+function filtered() {
+  const c = $('fCust').value, f = $('fFrom').value, to = $('fTo').value, q = lc($('fText').value);
+  return S.receipts.filter(r => (!c || (c === '(none)' ? !r.customer : r.customer === c)) && (!f || r.date >= f) && (!to || r.date <= to)
+    && (!q || lc([r.payee, r.memo, r.note, r.customer, r.category, r.total].join(' ')).includes(q)))
+    .sort((a, b) => (b.date || '').localeCompare(a.date || '') || b.created - a.created);
+}
+function renderList() {
+  const rs = filtered(), tb = $('rBody'); tb.innerHTML = '';
+  if (!rs.length) tb.append(el('tr', null, el('td', { colspan: 7, class: 'empty', text: S.receipts.length ? 'No receipts match.' : 'No receipts yet.' })));
+  const ids = new Set(S.receipts.map(r => r.id));
+  rs.forEach(r => {
+    const isNew = seenIds && !seenIds.has(r.id);
+    const tr = el('tr', { class: 'click' + (isNew ? ' newflash' : '') },
+      el('td', { class: 'thumb' }, r.hasImage ? el('img', { src: `/img/${r.id}.jpg?v=${r.received}`, alt: '', loading: 'lazy' }) : ''),
+      el('td', { text: fmtDate(r.date), style: 'white-space:nowrap' }),
+      el('td', null, r.customer || el('span', { class: 'tag none', text: 'No customer' })),
+      el('td', { text: r.payee || r.memo || '' }), el('td', { text: r.category || '' }),
+      el('td', { class: 'amt', text: money(r.total) }), el('td', { class: 'muted', text: r.note || '' }));
+    tr.onclick = () => openRec(r);
+    tb.append(tr);
+  });
+  seenIds = ids;
+  const sum = rs.reduce((s, r) => s + (r.total || 0), 0);
+  $('fSum').textContent = `${rs.length} shown · ${money(sum)}`;
+}
+['fCust', 'fFrom', 'fTo', 'fText'].forEach(id => $(id).addEventListener('input', () => { renderOwed(); renderList(); }));
+$('fClear').onclick = () => { $('fCust').value = ''; $('fFrom').value = ''; $('fTo').value = ''; $('fText').value = ''; renderOwed(); renderList(); };
+$('bExport').onclick = () => {
+  const rs = filtered();
+  const q = v => '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"';
+  const lines = [['Date', 'Customer', 'Payee', 'Category', 'Total', 'Memo', 'Note'].map(q).join(',')]
+    .concat(rs.map(r => [r.date, r.customer, r.payee, r.category, r.total == null ? '' : r.total.toFixed(2), r.memo, r.note].map(q).join(',')));
+  const a = el('a', { href: URL.createObjectURL(new Blob(['﻿' + lines.join('\r\n')], { type: 'text/csv' })), download: 'receipts.csv' });
+  document.body.append(a); a.click(); a.remove();
+};
+
+/* receipt dialog */
+function openRec(r) {
+  editing = r;
+  $('recTitle').textContent = (r.payee || 'Receipt') + ' · ' + money(r.total);
+  $('recImg').src = r.hasImage ? `/img/${r.id}.jpg?v=${r.received}` : '';
+  $('eDate').value = r.date || ''; $('eTotal').value = r.total == null ? '' : r.total.toFixed(2);
+  $('ePayee').value = r.payee || ''; $('eMemo').value = r.memo || ''; $('eCust').value = r.customer || ''; $('eCat').value = r.category || ''; $('eNote').value = r.note || '';
+  $('recMeta').textContent = `Scanned ${new Date(r.created).toLocaleString()} · received ${new Date(r.received).toLocaleString()}`;
+  $('recOcr').textContent = r.ocrText || '(none)';
+  editing.memoManual = !!r.memoManual;
+  $('dRec').showModal();
+}
+const canon = (list, v) => { v = norm(v); return list.find(x => lc(x) === lc(v)) || v; };
+$('ePayee').addEventListener('input', () => { if (!editing.memoManual) $('eMemo').value = $('ePayee').value; });
+$('eMemo').addEventListener('input', () => { editing.memoManual = !!norm($('eMemo').value) && norm($('eMemo').value) !== norm($('ePayee').value); });
+$('recImg').onclick = () => { if ($('recImg').src) window.open($('recImg').src, '_blank'); };
+$('recSave').onclick = async () => {
+  const t = norm($('eTotal').value).replace(/[$,\s]/g, '');
+  if (t && isNaN(parseFloat(t))) { alert('The total should be a number, like 17.81'); return; }
+  const payee = canon(S.payees.map(p => p.name), $('ePayee').value);
+  const body = Object.assign({}, editing, {
+    date: $('eDate').value, total: t ? Math.round(parseFloat(t) * 100) / 100 : null, payee,
+    memo: editing.memoManual ? norm($('eMemo').value) : payee, memoManual: editing.memoManual,
+    customer: canon(S.customers, $('eCust').value), category: canon(S.categories, $('eCat').value), note: $('eNote').value.trim() });
+  try { await post('/local/receipt', body); $('dRec').close(); toast('Saved ✓'); sig = ''; refresh(); } catch (e) { alert('Could not save: ' + e.message); }
+};
+$('recDel').onclick = async () => {
+  if (!confirm('Delete this receipt? (The photo is kept in the "deleted" folder, just in case.)')) return;
+  try { await post('/local/delete', { id: editing.id }); $('dRec').close(); toast('Deleted'); sig = ''; refresh(); } catch (e) { alert(e.message); }
+};
+
+/* phone setup */
+function fillSetup() {
+  const ip = (S.ips && S.ips[0]) || '(not on Wi-Fi)';
+  const url = `http://${ip}:${S.httpPort}/setup`;
+  $('setupUrl').textContent = url;
+  const q = '/qr.png?u=' + encodeURIComponent(url);
+  if ($('qr').getAttribute('src') !== q) $('qr').src = q;
+  $('addrBig').textContent = ip;
+  $('codeBig').textContent = S.pairCode;
+  const mins = Math.max(0, Math.round((S.pairExpires - Date.now()) / 60000));
+  $('codeExp').textContent = `Code works for about ${mins} more minute${mins === 1 ? '' : 's'}. Each code connects one phone.`;
+  $('phonesInfo').textContent = S.devices ? `${S.devices} phone${S.devices === 1 ? ' is' : 's are'} connected.` : 'No phones connected yet.';
+  if (S.ips && S.ips.length > 1) $('phonesInfo').textContent += ` Other addresses for this computer: ${S.ips.slice(1).join(', ')}`;
+}
+$('bSetup').onclick = () => { fillSetup(); $('dSetup').showModal(); };
+$('bNewCode').onclick = async () => { await post('/local/newcode'); sig = ''; await refresh(); fillSetup(); };
+$('bForget').onclick = async () => { if (!confirm('Disconnect all phones? They will need a new code to sync again.')) return; await post('/local/forgetphones'); await refresh(); fillSetup(); };
+
+/* lists */
+function showTab(t) { document.querySelectorAll('#dLists .tab').forEach(b => b.classList.toggle('on', b.dataset.tab === t)); document.querySelectorAll('#dLists .pane').forEach(p => p.classList.toggle('on', p.dataset.pane === t)); }
+document.querySelectorAll('#dLists .tab').forEach(b => b.onclick = () => showTab(b.dataset.tab));
+const payText = ps => ps.map(p => p.name + (p.words && p.words.length ? ' | ' + p.words.join(', ') : '')).join('\n');
+$('bLists').onclick = () => {
+  $('tCust').value = S.customers.join('\n'); $('tCat').value = S.categories.join('\n'); $('tPay').value = payText(S.payees);
+  $('cNames').checked = S.useNames !== false; $('dLists').showModal();
+};
+function parsePayees(text) {
+  return text.split(/\r?\n/).map(l => { const [n, w] = l.split('|'); return { name: norm(n), words: (w || '').split(',').map(norm).filter(Boolean) }; }).filter(p => p.name);
+}
+$('bImport').onclick = () => $('importFile').click();
+$('importFile').onchange = async e => {
+  const f = e.target.files[0]; e.target.value = ''; if (!f) return;
+  try {
+    const s = JSON.parse(await f.text());
+    const vl = Array.isArray(s.vendorList) ? s.vendorList : Array.isArray(s.vendors) ? s.vendors.map(n => ({ name: n, words: [] })) : null;
+    if (!vl) throw new Error();
+    const cur = parsePayees($('tPay').value), byName = new Map(cur.map(p => [lc(p.name), p]));
+    vl.forEach(v => { const k = lc(v.name); if (!k) return; const p = byName.get(k); if (p) p.words = [...new Set(p.words.concat(v.words || []))]; else { const n = { name: norm(v.name), words: v.words || [] }; cur.push(n); byName.set(k, n); } });
+    $('tPay').value = payText(cur.sort((a, b) => a.name.localeCompare(b.name)));
+    if (typeof s.useVendorList === 'boolean') $('cNames').checked = s.useVendorList;
+    toast(`Imported ${vl.length} payees. Click Save lists.`);
+  } catch (err) { alert("That file isn't a KellerKraft Time Saver settings backup."); }
+};
+$('bSaveLists').onclick = async () => {
+  const lines = id => $(id).value.split(/\r?\n/).map(norm).filter(Boolean);
+  try {
+    await post('/local/lists', { customers: lines('tCust'), categories: lines('tCat'), payees: parsePayees($('tPay').value), useNames: $('cNames').checked });
+    $('dLists').close(); toast('Lists saved ✓ The phone gets them on its next sync.'); sig = ''; refresh();
+  } catch (e) { alert('Could not save: ' + e.message); }
+};
+
+/* settings */
+$('bSettings').onclick = () => { $('cAuto').checked = !!S.autostart; $('dirText').textContent = S.dataDir; $('verText').textContent = 'Version ' + S.version; $('dSettings').showModal(); };
+$('cAuto').onchange = async () => { try { const r = await post('/local/autostart', { on: $('cAuto').checked }); $('cAuto').checked = r.on; toast(r.on ? 'Will start with Windows ✓' : 'Will not start with Windows'); } catch (e) { alert(e.message); } };
+$('bFolder').onclick = () => post('/local/openfolder');
+$('bQuit').onclick = async () => {
+  if (!confirm('Stop KellerKraft Receipts? The phone cannot sync until you start it again.')) return;
+  await post('/local/quit').catch(() => {});
+  document.body.innerHTML = '<div style="padding:40px;font:18px Segoe UI,sans-serif">KellerKraft Receipts has stopped. You can close this tab.</div>';
+};
+document.querySelectorAll('[data-close]').forEach(b => b.addEventListener('click', () => b.closest('dialog').close()));
+
+refresh();
+setInterval(refresh, 4000);
+</script>
+</body></html>

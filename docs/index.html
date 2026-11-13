@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<title>KK Receipts</title>
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="KK Receipts">
+<meta name="theme-color" content="#1f6feb">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="stylesheet" href="app.css">
+</head>
+<body>
+<div id="app">
+
+  <!-- HOME -->
+  <section id="scr-home" class="screen on">
+    <header class="top">
+      <div>
+        <h1>KK Receipts</h1>
+        <div class="sub">KellerKraft Time Saver</div>
+      </div>
+      <button class="icon" id="btnSettings" aria-label="Settings">⚙︎</button>
+    </header>
+    <div id="syncBar" class="syncbar"></div>
+    <div class="list" id="list"></div>
+    <div class="empty hidden" id="emptyList">
+      <div class="big">🧾</div>
+      <p>No receipts yet.<br>Tap <b>Scan receipt</b> to add one.</p>
+    </div>
+    <footer class="bottom">
+      <button class="secondary" id="btnSync">⟳ Sync</button>
+      <label class="primary scanbtn">📷 Scan receipt<input type="file" id="camera" accept="image/*" capture="environment" hidden></label>
+    </footer>
+  </section>
+
+  <!-- CROP -->
+  <section id="scr-crop" class="screen">
+    <header class="top">
+      <button class="link" id="cropBack">‹ Cancel</button>
+      <h2>Adjust corners</h2>
+      <span style="width:60px"></span>
+    </header>
+    <div class="cropwrap" id="cropWrap">
+      <canvas id="cropCanvas"></canvas>
+      <svg id="cropSvg"><polygon id="cropPoly"/></svg>
+      <div class="handle" data-i="0"></div><div class="handle" data-i="1"></div>
+      <div class="handle" data-i="2"></div><div class="handle" data-i="3"></div>
+    </div>
+    <p class="hint">Drag the circles to the receipt's corners.</p>
+    <footer class="bottom">
+      <button class="secondary" id="cropWhole">Whole photo</button>
+      <button class="primary" id="cropOk">Use scan ✓</button>
+    </footer>
+  </section>
+
+  <!-- EDIT -->
+  <section id="scr-edit" class="screen">
+    <header class="top">
+      <button class="link" id="editBack">‹ Back</button>
+      <h2 id="editTitle">Receipt</h2>
+      <button class="link" id="editSave"><b>Save</b></button>
+    </header>
+    <div class="scroll">
+      <div class="preview"><img id="editImg" alt="Receipt"></div>
+      <div id="ocrStatus" class="ocr hidden"></div>
+      <div class="form">
+        <label>Date<input type="date" id="fDate"></label>
+        <label>Total<div class="money"><span>$</span><input type="text" id="fTotal" inputmode="decimal" placeholder="0.00"></div></label>
+        <label>Payee<input type="text" id="fPayee" list="payeeList" autocomplete="off" autocapitalize="words" placeholder="(blank)"></label>
+        <div id="storeHint" class="hintline hidden"></div>
+        <label>Memo<input type="text" id="fMemo" autocomplete="off" placeholder="Same as payee"></label>
+        <label>Customer<select id="fCustomer"></select></label>
+        <label>Category<select id="fCategory"></select></label>
+        <label>Note <span class="opt">(stays with this receipt only)</span><textarea id="fNote" rows="3" placeholder="e.g. tile for upstairs bathroom"></textarea></label>
+      </div>
+      <div class="meta" id="editMeta"></div>
+      <button class="danger wide" id="editDelete">Delete receipt</button>
+    </div>
+  </section>
+
+  <!-- SETTINGS -->
+  <section id="scr-settings" class="screen">
+    <header class="top">
+      <button class="link" id="setBack">‹ Back</button>
+      <h2>Settings</h2>
+      <span style="width:60px"></span>
+    </header>
+    <div class="scroll">
+      <div class="card">
+        <h3>Connect to your computer</h3>
+        <p class="small">On your computer, open <b>KellerKraft Receipts</b> and click <b>Phone setup</b>. Type in the address and code it shows.</p>
+        <label>Computer address<input type="text" id="sAddr" inputmode="decimal" placeholder="e.g. 192.168.1.20" autocomplete="off"></label>
+        <label>Code<input type="text" id="sCode" inputmode="numeric" placeholder="6 digits" maxlength="6" autocomplete="off"></label>
+        <button class="primary wide" id="btnPair">Connect</button>
+        <div id="pairMsg" class="small"></div>
+      </div>
+      <div class="card">
+        <h3>Scanning</h3>
+        <label class="row"><input type="checkbox" id="sBW" checked> Black &amp; white scan (like Notes)</label>
+        <label class="row"><input type="checkbox" id="sNames" checked> Fill in the payee when its name is on the receipt</label>
+      </div>
+      <div class="card">
+        <h3>Phone storage</h3>
+        <p class="small" id="storeInfo"></p>
+        <button class="secondary wide" id="btnClean">Remove synced receipts from this phone</button>
+        <p class="small muted">They stay safe on your computer.</p>
+      </div>
+      <p class="small muted center" id="version"></p>
+    </div>
+  </section>
+
+  <!-- VIEWER -->
+  <div id="viewer" class="viewer hidden"><img id="viewerImg" alt="Receipt"><button class="icon close" id="viewerClose">✕</button></div>
+  <div id="busy" class="busy hidden"><div class="spinner"></div><div id="busyText">Working…</div></div>
+  <div id="toast" class="toast hidden"></div>
+</div>
+<datalist id="payeeList"></datalist>
+
+<script src="vendor/tesseract/tesseract.min.js"></script>
+<script src="db.js"></script>
+<script src="scan.js"></script>
+<script src="parse.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

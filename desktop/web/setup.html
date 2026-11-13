@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Phone setup — KellerKraft Receipts</title>
+<style>
+:root{--bg:#f2f3f5;--card:#fff;--text:#1d2329;--muted:#6b7580;--accent:#1f6feb;--soft:#e7f0fd;--good:#1a7f37}
+@media (prefers-color-scheme:dark){:root{--bg:#000;--card:#1c1c1e;--text:#f2f2f7;--muted:#9a9aa1;--accent:#4c8dff;--soft:#1c2a40;--good:#4cc26b}}
+body{margin:0;background:var(--bg);color:var(--text);font:17px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+.wrap{max-width:560px;margin:0 auto;padding:16px 16px 40px}
+h1{font-size:24px;margin:8px 0 2px}.sub{color:var(--accent);font-weight:600;font-size:14px;margin-bottom:14px}
+.step{background:var(--card);border-radius:14px;padding:14px 16px;margin:12px 0}
+.step h2{font-size:18px;margin:0 0 8px;display:flex;gap:10px;align-items:center}
+.n{width:28px;height:28px;border-radius:50%;background:var(--accent);color:#fff;display:inline-grid;place-items:center;font-size:15px;flex:none}
+ol{padding-left:22px;margin:6px 0}li{margin:6px 0}
+.btn{display:block;text-align:center;background:var(--accent);color:#fff;text-decoration:none;font-weight:600;border-radius:12px;padding:13px;margin:10px 0 4px}
+.btn.soft{background:var(--soft);color:var(--accent)}
+.path{font-weight:600;background:var(--soft);color:var(--accent);padding:1px 7px;border-radius:6px}
+.big{font-size:22px;font-weight:700;letter-spacing:.5px}
+.muted{color:var(--muted);font-size:14px}
+</style></head>
+<body><div class="wrap">
+<h1>Phone setup</h1>
+<div class="sub">KellerKraft Receipts</div>
+<p class="muted">Do these steps once, on the iPhone, in <b>Safari</b>, while on your home Wi-Fi.</p>
+
+<div class="step">
+  <h2><span class="n">1</span> Let the iPhone trust this computer</h2>
+  <a class="btn" href="/ca.crt">Download security certificate</a>
+  <ol>
+    <li>Tap <b>Allow</b> when Safari asks to download a configuration profile, then <b>Close</b>.</li>
+    <li>Open the <b>Settings</b> app. Tap <span class="path">Profile Downloaded</span> near the top (or <span class="path">General → VPN &amp; Device Management</span>), choose <b>KellerKraft Receipts</b> and tap <b>Install</b> (3 times) and enter your passcode.</li>
+    <li>Then go to <span class="path">Settings → General → About → Certificate Trust Settings</span> and turn <b>on</b> KellerKraft Receipts. Tap <b>Continue</b>.</li>
+  </ol>
+  <a class="btn soft" id="test" href="#">Test the secure connection</a>
+  <p class="muted">It should say "✓ Secure connection works". If Safari says the connection isn't private, step 1 isn't finished.</p>
+</div>
+
+<div class="step">
+  <h2><span class="n">2</span> Put the app on your Home Screen</h2>
+  <a class="btn" href="https://killokreator.github.io/receipt-tracker/">Open KK Receipts</a>
+  <ol>
+    <li>In Safari, tap the <b>Share</b> button (square with an arrow).</li>
+    <li>Tap <b>Add to Home Screen</b>, then <b>Add</b>.</li>
+    <li>Always open the app from that <b>Home Screen icon</b>. It works even with no signal.</li>
+  </ol>
+</div>
+
+<div class="step">
+  <h2><span class="n">3</span> Connect the app to this computer</h2>
+  <ol>
+    <li>Open <b>KK Receipts</b> from the Home Screen and tap <b>⚙︎</b>.</li>
+    <li>Computer address: <span class="big" id="addr"></span></li>
+    <li>Code: shown on the computer screen under <b>Phone setup</b>.</li>
+    <li>Tap <b>Connect</b>.</li>
+  </ol>
+</div>
+<p class="muted">Receipts only ever travel between your iPhone and this computer over your own Wi-Fi.</p>
+</div>
+<script>
+document.getElementById('addr').textContent = location.hostname;
+document.getElementById('test').href = 'https://' + location.hostname + ':8443/';
+</script>
+</body></html>
