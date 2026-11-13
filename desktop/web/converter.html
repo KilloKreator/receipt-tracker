@@ -155,7 +155,7 @@ h4.sec .count{font-size:13px;font-weight:600;background:var(--accent-soft);color
 dialog.rules{height:min(760px,calc(100vh - 40px))}
 dialog.rules[open]{display:flex;flex-direction:column}
 dialog.rules .dlg-body{flex:1;overflow-y:auto}
-.vend-form{grid-template-columns:minmax(180px,1fr) minmax(240px,2fr) auto}
+.vend-form{grid-template-columns:minmax(240px,2fr) minmax(200px,1.4fr) auto}
 @media (max-width:640px){.vend-form{grid-template-columns:1fr}}
 .chip{display:inline-block;font-size:12px;background:var(--accent-soft);color:var(--accent);padding:1px 8px;border-radius:999px;margin:1px 3px 1px 0}
 .vend-table{max-height:420px;overflow:auto}
@@ -392,8 +392,8 @@ td.cust input{width:100%;min-width:0}
 <dialog id="rulesDlg" class="rules">
   <div class="dlg-head"><h3>⚙ Rules</h3><button type="button" class="small" data-close>✕</button></div>
   <div class="tabs" role="tablist">
-    <button type="button" class="tab" role="tab" data-tab="cat">📂 Category</button>
     <button type="button" class="tab" role="tab" data-tab="vend">🏪 Payees</button>
+    <button type="button" class="tab" role="tab" data-tab="cat">📂 Category</button>
     <button type="button" class="tab" role="tab" data-tab="bank">🏦 Bank</button>
   </div>
   <div class="dlg-body">
@@ -423,8 +423,8 @@ td.cust input{width:100%;min-width:0}
       <p class="muted" style="margin-top:0">Your QuickBooks payees. When a bank description contains one of a payee's <b>auto-select words</b>, that payee is filled in. Names must be spelled exactly as in QuickBooks.</p>
       <h4 class="sec" id="vendFormTitle">➕ Add a payee</h4>
       <div class="rule-form vend-form">
-        <div><label for="vName">Payee name (as in QuickBooks)</label><input type="text" id="vName" list="vendList" placeholder="e.g. Amazon"></div>
-        <div class="wide"><label for="vWords">Auto-select when the bank description contains <span class="opt">(optional; separate several with commas)</span></label><input type="text" id="vWords" placeholder="e.g. AMAZON MKTPL, AMZN"></div>
+        <div class="wide"><label for="vWords">If the bank description says <span class="opt">(several? separate with commas)</span></label><input type="text" id="vWords" placeholder="e.g. AMAZON MKTPL, AMZN"></div>
+        <div><label for="vName">→ the payee is <span class="opt">(type or pick)</span></label><input type="text" id="vName" list="vendList" placeholder="e.g. Amazon"></div>
         <div class="row"><button type="button" class="primary" id="btnVendSave">Add payee</button><button type="button" id="btnVendCancel" class="hidden">Cancel</button></div>
       </div>
       <div id="vendErr" class="msg bad hidden"></div>
@@ -574,10 +574,10 @@ td.cust input{width:100%;min-width:0}
         <p><b>🏪 Payees tab: who you paid</b></p>
         <ul>
           <li>Your QuickBooks payee list (the master list, filled with 📋 Lists → Import), spelled exactly as in QuickBooks.</li>
-          <li><b>Add a payee:</b> type its name and, optionally, its <b>auto-select words</b>. When a bank description contains one of those words, that payee is filled in. Example: <i>The Home Depot</i> with words <b>HOME DEPOT, HOMEDEPOT</b>.</li>
+          <li><b>Add a payee:</b> fill in <b>"If the bank description says"</b> (the words to look for) and <b>"→ the payee is"</b> (type or pick the payee). When a bank description contains one of those words, that payee is filled in. Example: <i>The Home Depot</i> with words <b>HOME DEPOT, HOMEDEPOT</b>.</li>
           <li>Separate several words with commas. If several payees match, the longest matching word wins.</li>
           <li><b>Also auto-select a payee when its name appears</b> (ticked): even without words, <i>LOWES #03444*</i> → <b>Lowes</b> and <i>SHELL OIL 57444</i> → <b>Shell</b>.</li>
-          <li>Quick way: click the small <span class="ui">+</span> next to a payee box in the transaction list.</li>
+          <li>Quick way: click the small <span class="ui">+</span> next to a payee box in the transaction list. The bank description words are filled in for you; just type or pick the payee.</li>
           <li>Tags in the list: <span class="tag warn">new payee</span> means it isn't on your list and will be <b>created</b> in QuickBooks when you import (only if <b>Add new payees to QuickBooks automatically</b> is ticked).</li>
           <li>The memo is filled in with the <b>payee's name</b>. When no payee matches, the payee stays <b>blank</b> and the memo holds the full bank description.</li>
           <li>When you add a payee (vendor) in QuickBooks, add it here too.</li>
@@ -1385,7 +1385,7 @@ $('btnAddAccount').addEventListener('click',()=>openAccount(null));
 $('btnEditAccount').addEventListener('click',()=>{ const a=currentAccount(); if(a) openAccount(a); });
 
 /* ---------------- Rules dialog (tabs: Category / Vendors / Bank) ---------------- */
-let editingRule = null, editingVendor = null, curTab = 'cat';
+let editingRule = null, editingVendor = null, curTab = 'vend';
 function accName(id){ if(!id||id==='all') return 'All accounts'; const a=S.accounts.find(x=>x.id===id); return a?a.name:'(deleted)'; }
 function showTab(t){
   curTab = t;
@@ -1557,7 +1557,7 @@ function openRules(tab, fromRow){
     $('vWords').value = guessVendor(fromRow.desc);
   }
   $('rulesDlg').showModal();
-  if(fromRow) (tab==='cat' ? (!$('rCat').value ? $('rCat') : $('rText')) : $('vWords')).focus();
+  if(fromRow){ if(tab==='cat') (!$('rCat').value ? $('rCat') : $('rText')).focus(); else { $('vName').focus(); $('vName').select(); } }
 }
 $('btnRules').addEventListener('click',()=>openRules(null));
 
