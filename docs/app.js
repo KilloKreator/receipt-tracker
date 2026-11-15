@@ -1,6 +1,6 @@
 /* Time Saver — phone app */
 'use strict';
-const VERSION = '0.2.1';
+const VERSION = '0.2.2';
 const DEFAULT_CATEGORY = 'Uncategorized Expenses';
 const $ = id => document.getElementById(id);
 const norm = s => String(s == null ? '' : s).replace(/\s+/g, ' ').trim();
@@ -523,30 +523,19 @@ $('editDelete').onclick = async () => {
 // Just the computer's address, whatever was typed or pasted ("http://192.168.1.20:8780/setup" -> "192.168.1.20")
 function cleanAddr(a) { return norm(a).replace(/^https?:\/\//i, '').replace(/\/.*$/, '').replace(/:\d+$/, '').trim(); }
 function baseURL() { return 'https://' + cleanAddr(settings.addr) + ':8443'; }
-async function api(method, path, body, timeoutMs = 15000, opts = {}) {
-  try { return await apiOnce(method, path, body, timeoutMs); }
-  catch (e) {
-    // The computer may have been given a new address by the Wi-Fi router: look for it, then try once more
-    if (!e.unreachable || !settings.token || opts.noSearch) throw e;
-    const found = await findComputer(opts.manual);
-    if (!found) throw e;
-    return await apiOnce(method, path, body, timeoutMs);
-  }
-}
+// opts is no longer used (the automatic search was removed); kept so older calls still work
+async function api(method, path, body, timeoutMs = 15000, opts = {}) { return apiOnce(method, path, body, timeoutMs); }
 
 /* Find this computer again after its address changed. Only the same home network is
    searched (same first three numbers, e.g. 192.168.1.___). The computer is recognized by
    the key it gave this phone, so another computer is never picked by mistake. */
-let searching = null, lastSearch = 0;
+let searching = null;
 function findComputer(manual) {
   if (searching) return searching;
   const m = cleanAddr(settings.addr).match(/^(\d{1,3}\.\d{1,3}\.\d{1,3})\.(\d{1,3})$/);
   if (!m) return Promise.resolve(false);
-  if (!manual && Date.now() - lastSearch < 10 * 60e3) return Promise.resolve(false);   // computer probably just off
-  lastSearch = Date.now();
   const prefix = m[1], old = +m[2];
   searching = (async () => {
-    showSearching(true);
     const tries = [];
     for (let i = 1; i <= 254; i++) if (i !== old) tries.push(prefix + '.' + i);
     const probe = async ip => {
@@ -563,19 +552,38 @@ function findComputer(manual) {
         const hit = group[ok.indexOf(true)];
         if (hit) {
           settings.addr = hit; await saveSettings();
-          toast('✓ Found your computer at its new address: ' + hit);
           return true;
         }
       }
       return false;
-    } finally { showSearching(false); searching = null; }
+    } finally { searching = null; }
   })();
   return searching;
 }
 function showSearching(on) {
-  const b = $('btnSync'); if (!b) return;
-  if (on) { b.dataset.label = b.textContent; b.textContent = 'Looking for computer…'; }
-  else if (b.dataset.label) { b.textContent = b.dataset.label; delete b.dataset.label; }
+  const b = $('btnFind'); if (!b) return;
+  b.disabled = on;
+  b.textContent = on ? 'Looking on your Wi-Fi… (up to 30 seconds)' : 'Find my computer on this Wi-Fi';
+}
+// Only when this button is tapped (Sync never searches by itself)
+$('btnFind').onclick = async () => {
+  if (!settings.token) { $('pairMsg').textContent = 'Connect with the address and code first.'; return; }
+  showSearching(true);
+  try { await findNow(); } finally { showSearching(false); }
+};
+async function findNow() {
+  try { await apiOnce('GET', '/api/lists', null, 5000); $('pairMsg').textContent = `✓ Your computer is answering at ${settings.addr}. Nothing to find.`; return; } catch (e) { if (e.status === 401) { $('pairMsg').textContent = 'The computer needs a new code for this phone. Type the 6-digit code shown on the computer (☰ → Phone setup).'; return; } }
+  $('pairMsg').textContent = 'Looking for your computer…';
+  const ok = await findComputer(true);
+  if (ok) { $('sAddr').value = settings.addr; $('pairMsg').textContent = `✓ Found your computer at ${settings.addr}.`; $('connSummary').textContent = `Set up for ${settings.addr}`; sync(true); }
+  else $('pairMsg').textContent = "Couldn't find it. Check that Time Saver is open on the computer and that Windows is allowing it (see the computer's ☰ → Phone setup).";
+}
+// Check the connection for real when Settings is opened
+async function checkLive() {
+  if (!settings.token) return;
+  $('pairMsg').textContent = `Set up for ${settings.addr}. Checking…`;
+  try { await apiOnce('GET', '/api/lists', null, 5000); $('pairMsg').textContent = `✓ Connected to ${settings.addr} right now`; $('connSummary').textContent = `✓ Connected to ${settings.addr}`; }
+  catch (e) { $('connCard').open = true; $('connSummary').textContent = `⚠ Computer not answering (${settings.addr})`; $('pairMsg').textContent = e.status === 401 ? 'The computer needs a new code for this phone (☰ → Phone setup on the computer).' : `Set up for ${settings.addr}, but the computer isn't answering right now. Is Time Saver open? If the computer's address changed, tap Find my computer.`; }
 }
 async function apiOnce(method, path, body, timeoutMs = 15000) {
   const ctl = new AbortController(), t = setTimeout(() => ctl.abort(), timeoutMs);
@@ -592,7 +600,7 @@ async function apiOnce(method, path, body, timeoutMs = 15000) {
     const x = new Error('unreachable'); x.unreachable = true; throw x;
   } finally { clearTimeout(t); }
 }
-const UNREACHABLE = "Can't reach your computer (the phone also looked for it on your Wi-Fi). Check that:\n• this phone is on your home Wi-Fi\n• Time Saver is running on the computer\n• the security certificate is installed and trusted (Phone setup, step 1)";
+const UNREACHABLE = "Can't reach your computer. Check that:\n• this phone is on your home Wi-Fi\n• Time Saver is running on the computer\n• the address is right (if it changed: ⚙︎ → Computer connection → Find my computer)\n• the security certificate is installed and trusted (Phone setup, step 1)";
 
 async function sync(manual) {
   if (syncing) return;
@@ -648,8 +656,9 @@ function refreshPayeeList() {
 async function openSettings() {
   $('sAddr').value = settings.addr || ''; $('sCode').value = '';
   $('sBW').checked = settings.bw !== false; $('sNames').checked = settings.names !== false;
-  $('pairMsg').textContent = settings.token ? `✓ Connected to ${settings.addr}` : 'Not connected yet.';
-  $('connSummary').textContent = settings.token ? `✓ Connected to ${settings.addr}` : 'Not connected yet. Tap to set up.';
+  $('pairMsg').textContent = settings.token ? `Set up for ${settings.addr}` : 'Not connected yet.';
+  $('connSummary').textContent = settings.token ? `Set up for ${settings.addr}` : 'Not connected yet. Tap to set up.';
+  checkLive();
   $('connCard').open = !settings.token;
   try {
     const est = await navigator.storage.estimate();
