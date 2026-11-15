@@ -71,6 +71,8 @@ type Data struct {
 	NotDup []string `json:"notDup,omitempty"`
 	// Customer files left out of the IIF converter's customer match
 	NoMatch []string `json:"noMatch,omitempty"`
+	// Customer files made with "Add file" (shown even before they have receipts)
+	Folders []string `json:"folders,omitempty"`
 }
 
 type Store struct {

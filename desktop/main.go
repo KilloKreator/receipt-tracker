@@ -32,7 +32,7 @@ import (
 )
 
 const (
-	appVersion = "0.4.8"
+	appVersion = "0.4.9"
 	httpPort   = 8780 // dashboard + phone setup page
 	httpsPort  = 8443 // phone sync
 	phoneApp   = "https://killokreator.github.io/receipt-tracker/"
@@ -772,7 +772,7 @@ func localSite() http.Handler {
 			"pairCode": code, "pairExpires": exp.UnixMilli(), "phoneApp": phoneApp, "devices": len(store.data.Devices),
 			"company":  store.data.Company,
 			"receipts": rs, "customers": nz(store.data.Customers), "categories": nz(store.data.Categories),
-			"payees": store.data.Payees, "useNames": store.data.UseNames, "notDup": nz(store.data.NotDup), "noMatch": nz(store.data.NoMatch),
+			"payees": store.data.Payees, "useNames": store.data.UseNames, "notDup": nz(store.data.NotDup), "noMatch": nz(store.data.NoMatch), "folders": nz(store.data.Folders),
 			"lastSync": func() int64 {
 				if ls.IsZero() {
 					return 0
@@ -837,6 +837,47 @@ func localSite() http.Handler {
 			return
 		}
 		writeJSON(w, 200, map[string]bool{"ok": true})
+	}))
+	// "Add file": a new customer file (existing or new customer), left out of the IIF customer match to start with.
+	// {"customer": "X", "remove": true} removes an empty file made this way.
+	mux.HandleFunc("/local/folder", local(func(w http.ResponseWriter, r *http.Request) {
+		var in struct {
+			Customer string
+			Remove   bool
+		}
+		if json.NewDecoder(io.LimitReader(r.Body, 4096)).Decode(&in) != nil || strings.TrimSpace(in.Customer) == "" {
+			jsonErr(w, 400, "bad request")
+			return
+		}
+		name := strings.Join(strings.Fields(in.Customer), " ")
+		store.mu.Lock()
+		defer store.mu.Unlock()
+		without := func(list []string) []string {
+			out := []string{}
+			for _, c := range list {
+				if !strings.EqualFold(c, name) {
+					out = append(out, c)
+				}
+			}
+			return out
+		}
+		if in.Remove {
+			store.data.Folders = without(store.data.Folders)
+		} else {
+			for _, c := range store.data.Customers { // use the spelling already on the list
+				if strings.EqualFold(c, name) {
+					name = c
+				}
+			}
+			store.data.Customers = cleanList(append(store.data.Customers, name))
+			store.data.Folders = append(without(store.data.Folders), name)
+			store.data.NoMatch = append(without(store.data.NoMatch), name)
+		}
+		if err := store.save(); err != nil {
+			jsonErr(w, 500, err.Error())
+			return
+		}
+		writeJSON(w, 200, map[string]string{"customer": name})
 	}))
 	// Leave a customer file out of (or put it back in) the IIF converter's customer match
 	mux.HandleFunc("/local/nomatch", local(func(w http.ResponseWriter, r *http.Request) {

@@ -56,6 +56,7 @@ tfoot td{font-weight:700;background:var(--bg)}
 .ordin{width:44px;text-align:center;padding:5px 4px;font-weight:600}
 .nomatch.on{background:var(--warn-soft);color:var(--warn);border-color:var(--warn)}
 .tag.nm{background:var(--warn-soft);color:var(--warn);margin-left:6px;font-size:11px}
+.addstack{margin-left:auto;display:flex;flex-direction:column;gap:6px;align-items:stretch}
 .tag.dup{background:var(--warn-soft);color:var(--warn)}
 .btn.danger{background:var(--bad-soft);color:var(--bad);border-color:var(--bad-soft)}
 .tag{font-size:12px;padding:1px 8px;border-radius:999px;background:var(--soft);color:var(--accent);white-space:nowrap}
@@ -186,7 +187,8 @@ tr.picked td{background:var(--soft)}
 <section class="card dupwarn hidden" id="dupWarn" role="alert"></section>
 <section class="card" id="viewFolders">
   <h2>🧾 Receipts <span class="muted">Click a folder to open it.</span>
-    <button id="bAddTop" title="Add receipt pictures or PDFs from this computer" style="margin-left:auto">⬆ Add receipts…</button></h2>
+    <span class="addstack"><button id="bAddTop" title="Add receipt pictures or PDFs from this computer">⬆ Add receipts…</button>
+      <button id="bNewFile" title="Make a customer file: pick a customer or type a new one">📁 Add file…</button></span></h2>
   <div class="fgrid" id="topGrid"></div>
   <div class="custgroup" id="custGroup">
     <div class="cghead">
@@ -202,7 +204,8 @@ tr.picked td{background:var(--soft)}
   <div class="row" style="justify-content:space-between;margin-bottom:12px">
     <div class="row"><button id="bBack">‹ All customers</button><h2 style="margin:0 0 0 6px" id="custTitle"></h2>
       <button id="bAdd" title="Add receipt pictures or PDFs to this folder (or drag files onto this page)">⬆ Add receipts…</button>
-      <button id="bNoMatch" class="hidden"></button></div>
+      <button id="bNoMatch" class="hidden"></button>
+      <button id="bRmFile" class="hidden" title="This file has no receipts: remove it">Remove empty file</button></div>
     <div class="big" id="custTotal" style="font-size:22px"></div>
   </div>
   <div class="row" style="margin-bottom:10px">
@@ -237,6 +240,15 @@ tr.picked td{background:var(--soft)}
 </div>
 
 <!-- receipt -->
+<dialog id="dFile" class="narrow"><form method="dialog" id="fileForm">
+  <div class="dh"><h3>📁 Add a customer file</h3><button type="button" class="small" data-close>✕</button></div>
+  <div class="db">
+    <div class="field"><label for="nfName">Customer</label><input type="text" id="nfName" list="custList" placeholder="Pick a customer or type a new name" autocomplete="off"></div>
+    <div class="muted" id="nfHint">Type to pick from your customer list, or type a new name to add a new customer.</div>
+    <p class="muted" style="margin-bottom:0">The file starts out <b>🚫 Left out of IIF customer match</b>, so its receipts don't fill in customers in the IIF converter. You can turn that on inside the file.</p>
+  </div>
+  <div class="df"><button type="button" data-close>Cancel</button><button type="submit" class="primary" id="nfOk">Make the file</button></div>
+</form></dialog>
 <dialog id="dRec"><form method="dialog">
   <div class="dh"><h3 id="recTitle">Receipt</h3><button type="button" class="small" data-close>✕</button></div>
   <div class="db"><div class="rgrid">
@@ -399,7 +411,7 @@ function el(tag, props, ...kids) {
 
 async function refresh() {
   try { S = await get(); } catch (e) { $('status').textContent = 'Program is not running'; $('status').className = 'pill warn'; return; }
-  const s = JSON.stringify([S.receipts.map(r => r.id + r.updated + r.received + r.date + r.total + r.payee), S.notDup, S.noMatch, S.customers, S.categories, S.payees, S.ips, S.pairCode]);
+  const s = JSON.stringify([S.receipts.map(r => r.id + r.updated + r.received + r.date + r.total + r.payee), S.notDup, S.noMatch, S.folders, S.customers, S.categories, S.payees, S.ips, S.pairCode]);
   status();
   if (s === sig) return;
   if (document.activeElement && document.activeElement.classList.contains('ordin')) return;   // typing a PDF number: redraw later
@@ -476,6 +488,18 @@ function renderDupWarn() {
   }
   if (fresh) { box.scrollIntoView({ behavior: 'smooth', block: 'start' }); toast('⚠ A possible duplicate receipt came in. See the top of Receipts.'); }
 }
+$('bNewFile').onclick = () => { $('nfName').value = ''; $('nfHint').textContent = 'Type to pick from your customer list, or type a new name to add a new customer.'; $('dFile').showModal(); $('nfName').focus(); };
+$('nfName').addEventListener('input', () => {
+  const v = norm($('nfName').value), known = S.customers.find(c => lc(c) === lc(v));
+  $('nfHint').textContent = !v ? 'Type to pick from your customer list, or type a new name to add a new customer.' : known ? `✓ ${known} is on your customer list.` : `➕ "${v}" is a new customer. It will be added to your customer list.`;
+});
+$('fileForm').addEventListener('submit', async e => {
+  const v = norm($('nfName').value);
+  if (!v) { e.preventDefault(); $('nfName').focus(); return; }
+  try { const r = await post('/local/folder', { customer: v }); sig = ''; await refresh(); openCustomer(r.customer); toast(`📁 ${r.customer} file ready. Left out of the IIF customer match.`); }
+  catch (err) { alert(err.message); }
+});
+$('bRmFile').onclick = async () => { await post('/local/folder', { customer: curCust, remove: true }); sig = ''; await refresh(); $('bBack').click(); toast('Removed the empty file.'); };
 const isNoMatch = name => (S.noMatch || []).some(c => lc(c) === lc(name));
 $('bNoMatch').onclick = async () => {
   const off = !isNoMatch(curCust);
@@ -512,6 +536,7 @@ function renderFolders() {
   const top = $('topGrid'); top.innerHTML = '';
   card(top, '(all)', '🗂', 'All receipts', S.receipts, 'all');
   card(top, '(none)', '📂', 'No customer yet', m.get('(none)') || [], 'none');
+  (S.folders || []).forEach(f => { if (!m.has(f)) m.set(f, []); });      // files made with "Add file" (may be empty)
   const names = [...m.keys()].filter(k => k !== '(none)');
   const open = custOpen() || !!norm($('custSearch').value);
   const tg = el('button', { class: 'fcard toggle', title: open ? 'Close customer files' : 'Open customer files' },
@@ -556,7 +581,8 @@ function filtered() {
 }
 function renderCustomer() {
   const all = custRows();
-  if (curCust !== '(all)' && !all.length) { $('bBack').click(); return; }   // folder is empty now (e.g. everything was moved)
+  const madeFile = (S.folders || []).some(f => f === curCust);
+  if (curCust !== '(all)' && !all.length && !madeFile) { $('bBack').click(); return; }   // folder is empty now (e.g. everything was moved)
   $('custTitle').textContent = (curCust === '(all)' ? '🗂 All receipts' : curCust === '(none)' ? '📂 No customer yet' : '📁 ' + curCust);
   $('custTotal').innerHTML = '';
   $('custTotal').append(...[el('span', { text: money(billSum(all)) }), el('span', { class: 'tobill', text: ' to bill' }),
@@ -565,6 +591,7 @@ function renderCustomer() {
   const realCust = curCust !== '(all)' && curCust !== '(none)';
   $('bAssign').classList.toggle('hidden', realCust);              // inside a customer's file there's nothing to assign
   $('bNoMatch').classList.toggle('hidden', !realCust);
+  $('bRmFile').classList.toggle('hidden', !(madeFile && !all.length));
   if (realCust) {
     const off = isNoMatch(curCust);
     $('bNoMatch').textContent = off ? '🚫 Left out of IIF customer match' : 'IIF customer match: on';
