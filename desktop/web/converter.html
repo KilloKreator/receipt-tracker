@@ -518,7 +518,7 @@ td.cust input{width:100%;min-width:0}
           <li><b>Type:</b> <span class="tag out">Charge</span> / <span class="tag out">Expense</span> is money out. <span class="tag in">Credit</span> / <span class="tag in">Deposit</span> is money in.</li>
           <li><b>Category:</b> where the money goes in QuickBooks. Click in the box to type or pick a different one.</li>
           <li><b>Payee:</b> who you paid, e.g. <i>Amazon.com</i>. A rule fills it in, or you can type it. Otherwise it stays blank.</li>
-          <li><b>Customer:</b> filled in automatically when a receipt scanned on the phone has the <b>same amount and the same payee</b>. The date doesn't have to match, since bank dates are often a few days later. If several receipts match, the closest date is used. A 🧾 shows it came from a receipt; hover over it to see which one. You can type or change it. It goes on the expense line in QuickBooks (the Customer:Job column), so the customer name must match QuickBooks exactly.</li>
+          <li><b>Customer:</b> only for money going out. Incoming money (returns, refunds, payments) never gets a customer. Filled in automatically when a receipt scanned on the phone has the <b>same amount and the same payee</b>. The date doesn't have to match, since bank dates are often a few days later. If several receipts match, the closest date is used. A 🧾 shows it came from a receipt; hover over it to see which one. You can type or change it. It goes on the expense line in QuickBooks (the Customer:Job column), so the customer name must match QuickBooks exactly.</li>
           <li><b>Memo:</b> filled in automatically with the <b>payee's name</b> (e.g. <i>Amazon</i>). When the payee is <b>blank</b>, the memo holds the full bank description (e.g. <i>Amazon.com*5E4250O42</i>) so you can still tell what it was. You can type your own memo on any row.</li>
           <li><b>+</b> (far right, after Memo): makes a category rule from that row, so similar transactions get categorized automatically next time.</li>
           <li><b>Auto-categorize ☑:</b> on means use your rules. Off means everything goes to <i>Uncategorized</i>.</li>
@@ -964,10 +964,9 @@ function matchCustomers(){
   const used = new Set(loaded.rows.filter(r=>r.manualC && r.custFrom).map(r=>r.custFrom.id));
   const pairs = [];
   rows.forEach(row=>{
-    if(!norm(row.vendor)) return;
-    const signed = row.dir==='out' ? row.amount : -row.amount;   // a return receipt (negative total) matches a refund/credit line
+    if(row.dir!=='out' || !norm(row.vendor)) return;           // incoming money (returns, refunds, payments): never a customer
     recs.forEach(rc=>{
-      if(Math.abs(Number(rc.total)-signed) < 0.005 && lc(rc.payee)===lc(row.vendor)){
+      if(Math.abs(Number(rc.total)-row.amount) < 0.005 && lc(rc.payee)===lc(row.vendor)){
         const dd = Math.abs((new Date(row.iso+'T12:00') - new Date((rc.date||row.iso)+'T12:00'))/864e5);
         pairs.push({row, rc, dd});          // only total + payee must match; the date just picks the closest
       }
@@ -1062,7 +1061,7 @@ function buildIIF(acc, rows){
     const split = r.dir==='out' ? a : '-'+a;     // opposite side, to the category
     const memo = iifClean(r.memo), num = iifClean(r.num), name = cleanName(r.vendor);
     // Payee goes on the main line; for deposits QuickBooks keeps "Received from" on the split line
-    const cust = iifClean(r.customer).slice(0,159);
+    const cust = r.dir==='out' ? iifClean(r.customer).slice(0,159) : '';   // no customer on incoming money
     const tName = t==='DEPOSIT' ? '' : name, sName = t==='DEPOSIT' ? (name || cust) : cust;
     L.push(['TRNS','',t,r.date,iifClean(acc.name),tName,main,num,memo].join('\t'));
     L.push(['SPL','',t,r.date,iifClean(r.category),sName,split,num,memo].join('\t'));
@@ -1133,6 +1132,7 @@ function renderPreview(){
     const custWarn = el('span',{class:'tag warn', text:'not on list', title:'This customer is not on your customer list. QuickBooks needs the exact name.'});
     const showCW = ()=> custWarn.classList.toggle('hidden', !norm(row.customer) || isKnownCustomer(row.customer));
     showCW();
+    if(row.dir!=='out'){ row.customer=''; cus.value=''; cus.disabled=true; cus.placeholder='—'; cus.title='Incoming money (returns, refunds, payments) never gets a customer'; custWarn.classList.add('hidden'); }
     cus.addEventListener('input',()=>{ row.customer=cus.value; row.manualC=true; if(rcIcon) rcIcon.remove(); showCW(); });
     cus.addEventListener('change',()=>{ row.customer=canonCustomer(cus.value); cus.value=row.customer; row.manualC=!!row.customer || row.manualC; showCW(); });
     const mem = el('input',{type:'text', value:row.memo, placeholder:'(empty)', 'aria-label':'Memo'});
@@ -1600,7 +1600,7 @@ function buildXlsx(acc, rows){
     const serial=(Date.UTC(y,m-1,d)-Date.UTC(1899,11,30))/86400000;
     const amt = r.dir==='out' ? -r.amount : r.amount;
     if(r.dir==='out') tout+=r.amount; else tin+=r.amount;
-    xr.push(`<row r="${n}">${num('A'+n,serial,1)}${str('B'+n,r.desc)}${str('C'+n,typeLabel(acc,r.dir))}${num('D'+n,amt.toFixed(2),2)}${str('E'+n,norm(r.category))}${norm(r.vendor)?str('F'+n,norm(r.vendor)):''}${norm(r.customer)?str('G'+n,norm(r.customer)):''}${norm(r.memo)?str('H'+n,norm(r.memo)):''}${r.num?str('I'+n,r.num):''}${str('J'+n,acc.name)}</row>`);
+    xr.push(`<row r="${n}">${num('A'+n,serial,1)}${str('B'+n,r.desc)}${str('C'+n,typeLabel(acc,r.dir))}${num('D'+n,amt.toFixed(2),2)}${str('E'+n,norm(r.category))}${norm(r.vendor)?str('F'+n,norm(r.vendor)):''}${r.dir==='out'&&norm(r.customer)?str('G'+n,norm(r.customer)):''}${norm(r.memo)?str('H'+n,norm(r.memo)):''}${r.num?str('I'+n,r.num):''}${str('J'+n,acc.name)}</row>`);
   });
   const last=rows.length+1, t=last+2;
   const inL = acc.type==='CCARD'?'Total credits':'Total money in', outL = acc.type==='CCARD'?'Total charges':'Total money out';
