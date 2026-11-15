@@ -454,6 +454,7 @@ td.cust input{width:100%;min-width:0}
           <div class="field"><label for="dSkipCol">Skip rows where column…</label><input type="text" id="dSkipCol" placeholder="e.g. Type"></div>
           <div class="field"><label for="dSkipText">…contains this text</label><input type="text" id="dSkipText" placeholder="e.g. Payment"></div>
         </div>
+        <div class="field" style="margin-bottom:8px"><label class="check"><input type="checkbox" id="dSkipRet"> <span><b>Skip returns and refunds</b> (recommended). They still show in the list, unticked, so you can include one.</span></label></div>
         <div class="row"><button type="button" class="primary" id="btnDefSave">Save settings</button><span id="defMsg" class="muted"></span></div>
         <div id="defErr" class="msg bad hidden"></div>
       </div>
@@ -600,6 +601,7 @@ td.cust input{width:100%;min-width:0}
           <li>For credit cards, the <b>Skip card payments</b> box is on by default (in <span class="ui">Edit account</span>).</li>
           <li>Skipped payments still show in the list, <b>unticked</b>, with a <span class="tag warn">Skipped</span> label.</li>
           <li>To include one anyway, just tick its box.</li>
+          <li><b>Returns and refunds</b> are skipped the same way by default (when the bank's Type column or the description says Return or Refund). Change it under <span class="ui">Edit account</span> → <b>Skip returns and refunds</b>.</li>
         </ul>
       </section>
 
@@ -885,6 +887,9 @@ function buildRows(acc, text){
   const iCat = need("bank's category", acc.bankCatCol, false);
   const iSkip = need('skip', acc.skipCol, false);
   const skipText = lc(acc.skipText);
+  // Returns/refunds: the bank's "Type" column says Return/Refund, or the description does
+  const iType = H.findIndex(h=>lc(h)==='type' || lc(h)==='transaction type');
+  const isReturn = (cells, desc) => (iType>=0 && /return|refund/i.test(cells[iType]||'')) || /\b(return|refund)(s|ed)?\b/i.test(desc);
 
   const done = new Set(S.exported[acc.id] || []);
   const seen = {};
@@ -919,6 +924,8 @@ function buildRows(acc, text){
       vendor:'', memo:desc, manualV:false, manualM:false, customer:'', manualC:false, custFrom:null};
     if(acc.skipOn!==false && iSkip>=0 && skipText && lc(get(iSkip)).includes(skipText)){
       row.include=false; row.status=`Skipped (${norm(acc.skipCol)}: ${norm(get(iSkip))})`;
+    } else if(acc.skipReturns!==false && dir==='in' && isReturn(cells, desc)){
+      row.include=false; row.status='Skipped (return)';
     } else if(done.has(key)){
       row.include=false; row.status='Already exported';
     }
@@ -1529,6 +1536,7 @@ function fillDefaults(){
   $('dOut').value=a.uncatOut||''; $('dIn').value=a.uncatIn||'';
   $('dSkipOn').checked = a.skipOn===undefined ? !!(a.skipCol&&a.skipText) : !!a.skipOn;
   $('dSkipCol').value=a.skipCol||''; $('dSkipText').value=a.skipText||'';
+  $('dSkipRet').checked = a.skipReturns!==false;
   $('defMsg').textContent=''; $('defErr').classList.add('hidden');
 }
 $('defAcc').addEventListener('change',fillDefaults);
@@ -1540,7 +1548,7 @@ $('btnDefSave').addEventListener('click',()=>{
   if(on && (!col||!txt)) errs.push('To skip rows, fill in both the column and the text (or untick the skip box).');
   const e=$('defErr'); if(errs.length){ e.textContent=errs.join(' '); e.classList.remove('hidden'); return; }
   e.classList.add('hidden');
-  Object.assign(a,{uncatOut:out, uncatIn:inn, skipOn:on, skipCol:col, skipText:txt});
+  Object.assign(a,{uncatOut:out, uncatIn:inn, skipOn:on, skipCol:col, skipText:txt, skipReturns:$('dSkipRet').checked});
   saveSettings(); refreshCatList(); renderAccountInfo();
   if(currentAccount() && currentAccount().id===a.id) reloadForAccount();
   $('defMsg').textContent = `✓ Saved for ${a.name}`;
