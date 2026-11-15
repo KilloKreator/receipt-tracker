@@ -168,7 +168,7 @@ tr.picked td{background:var(--soft)}
   <div class="fgrid" id="topGrid"></div>
   <div class="custgroup" id="custGroup">
     <div class="cghead">
-      <span class="muted">Customer files</span>
+      <span class="muted">Customer files: most still to bill first, then most recent activity</span>
       <input type="search" id="custSearch" placeholder="🔍 Search for a customer" autocomplete="off">
     </div>
     <div class="fgrid" id="folderGrid"></div>
@@ -382,6 +382,9 @@ function render() {
 }
 const sumOf = rs => rs.reduce((s, r) => s + (r.total || 0), 0);
 const toBill = rs => rs.filter(r => !r.billedAt);
+// latest activity on any of these receipts: added, edited, billed or put in a PDF
+const lastAct = rs => rs.reduce((t, r) => Math.max(t, r.received || 0, r.updated || 0, r.billedAt || 0, r.pdfAt || 0, r.created || 0), 0);
+const actDate = t => { const d = new Date(t), now = new Date(); return d.toDateString() === now.toDateString() ? 'today' : d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: d.getFullYear() === now.getFullYear() ? undefined : 'numeric' }); };
 const billSum = rs => sumOf(toBill(rs));
 const plural = (n, w) => `${n} ${w}${n === 1 ? '' : 's'}`;
 /* recently opened customer files (kept on this computer) */
@@ -395,7 +398,8 @@ function renderFolders() {
   const card = (grid, key, icon, name, rs, cls, extra) => {
     const b = el('button', { class: 'fcard ' + (cls || ''), title: 'Open ' + name },
       el('span', { class: 'fi', text: icon }),
-      el('span', { class: 'fbody' }, el('div', { class: 'fn' }, name, extra || null), el('div', { class: 'fm', text: plural(rs.length, 'receipt') })),
+      el('span', { class: 'fbody' }, el('div', { class: 'fn' }, name, extra || null),
+        el('div', { class: 'fm', text: plural(rs.length, 'receipt') + (lastAct(rs) ? ' · active ' + actDate(lastAct(rs)) : '') })),
       el('span', { class: 'ft' }, money(billSum(rs)), billSum(rs) !== sumOf(rs) ? el('div', { class: 'fof', text: 'of ' + money(sumOf(rs)) }) : null));
     b.title = `Open ${name}: ${money(billSum(rs))} to bill (${plural(toBill(rs).length, 'receipt')} not billed)`;
     b.onclick = () => openCustomer(key);
@@ -417,14 +421,11 @@ function renderFolders() {
   // customer files: recently opened first, then A–Z
   const g = $('folderGrid'); g.innerHTML = '';
   if (open) {
-    const q = lc($('custSearch').value), rec = recentMap();
-    const list = names.filter(n => !q || lc(n).includes(q));
-    const recent = list.filter(n => rec[n]).sort((a, b) => rec[b] - rec[a]).slice(0, 8);
-    const rest = list.filter(n => !recent.includes(n)).sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
-    if (recent.length) g.append(el('div', { class: 'cgsep', text: '🕘 Recently opened' }));
-    recent.forEach(n => card(g, n, '📁', n, m.get(n), '', el('span', { class: 'recent', text: '🕘' })));
-    if (recent.length && rest.length) g.append(el('div', { class: 'cgsep', text: 'All customers A–Z' }));
-    rest.forEach(n => card(g, n, '📁', n, m.get(n)));
+    const q = lc($('custSearch').value);
+    // highest amount still to bill first; equal amounts (e.g. all $0) by most recent activity
+    const list = names.filter(n => !q || lc(n).includes(q)).sort((a, b) =>
+      (billSum(m.get(b)) - billSum(m.get(a))) || (lastAct(m.get(b)) - lastAct(m.get(a))) || a.localeCompare(b, undefined, { sensitivity: 'base' }));
+    list.forEach(n => card(g, n, '📁', n, m.get(n)));
     if (!list.length) g.append(el('div', { class: 'empty', text: q ? 'No customer files match.' : 'No customer files yet.' }));
   }
   $('grand').textContent = `${money(billSum(S.receipts))} to bill (of ${money(sumOf(S.receipts))})`;
