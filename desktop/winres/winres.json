@@ -11,10 +11,10 @@
     "#1": {
       "0409": {
         "identity": {
-          "name": "KellerKraft.TimeSaver",
-          "version": "0.3.7.0"
+          "name": "TimeSaver.App",
+          "version": "0.4.0.0"
         },
-        "description": "KellerKraft Time Saver",
+        "description": "Time Saver",
         "minimum-os": "win7",
         "execution-level": "as invoker",
         "ui-access": false,
@@ -36,19 +36,17 @@
     "#1": {
       "0000": {
         "fixed": {
-          "file_version": "0.3.7.0",
-          "product_version": "0.3.7.0"
+          "file_version": "0.4.0.0",
+          "product_version": "0.4.0.0"
         },
         "info": {
           "0409": {
-            "CompanyName": "KellerKraft LLC",
-            "FileDescription": "KellerKraft Time Saver - receipt tracker and CSV to IIF converter",
-            "FileVersion": "0.3.7",
-            "InternalName": "KellerKraft-Receipts",
-            "LegalCopyright": "KellerKraft LLC",
-            "OriginalFilename": "KellerKraft-Receipts.exe",
-            "ProductName": "KellerKraft Time Saver",
-            "ProductVersion": "0.3.7"
+            "FileDescription": "Time Saver - receipt tracker and CSV to IIF converter",
+            "FileVersion": "0.4.0",
+            "InternalName": "TimeSaver",
+            "OriginalFilename": "TimeSaver.exe",
+            "ProductName": "Time Saver",
+            "ProductVersion": "0.4.0"
           }
         }
       }

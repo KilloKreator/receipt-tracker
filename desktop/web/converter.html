@@ -3,9 +3,9 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>KellerKraft Time Saver</title>
-<!-- Bank CSV -> QuickBooks Desktop IIF converter (part of KellerKraft Receipts).
-     Runs 100% offline: it only talks to the KellerKraft Receipts program on this same computer. -->
+<title>Time Saver</title>
+<!-- Bank CSV -> QuickBooks Desktop IIF converter (part of Time Saver).
+     Runs 100% offline: it only talks to the Time Saver program on this same computer. -->
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; connect-src 'self'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src data: blob:;">
 <script>if(/[?&]embedded=1/.test(location.search))document.documentElement.classList.add("embedded");</script>
 <style>
@@ -185,7 +185,7 @@ td.cust input{width:100%;min-width:0}
 <div class="wrap">
   <header>
     <div class="brand">
-      <h1>KellerKraft Time Saver</h1>
+      <h1>Time Saver</h1>
       <div class="sub">CSV-IIF Converter</div>
       <div class="quote">“Just looking out for a Pops I love”</div>
     </div>
@@ -200,7 +200,7 @@ td.cust input{width:100%;min-width:0}
     </div>
   </header>
 
-  <div id="storageWarn" class="msg warn hidden">Settings could not be saved. Is KellerKraft Receipts still running?</div>
+  <div id="storageWarn" class="msg warn hidden">Settings could not be saved. Is Time Saver still running?</div>
 
   <!-- STEP 1 -->
   <section class="card step">
@@ -616,9 +616,9 @@ td.cust input{width:100%;min-width:0}
 
       <section data-topic="share">
         <h4>Backup &amp; sharing</h4>
-        <p>Your accounts, rules and export history are saved by the program in <b>Documents\KellerKraft Receipts</b>, together with your receipts. Payees and customers are the <b>master lists</b> shared with the Receipts tab and the phone (📋 Lists at the top).</p>
+        <p>Your accounts, rules and export history are saved by the program in <b>Documents\Time Saver</b>, together with your receipts. Payees and customers are the <b>master lists</b> shared with the Receipts tab and the phone (📋 Lists at the top).</p>
         <ul>
-          <li>Everything is saved automatically by the program. To copy it to another computer, copy the <b>Documents\KellerKraft Receipts</b> folder.</li>
+          <li>Everything is saved automatically by the program. To copy it to another computer, copy the <b>Documents\Time Saver</b> folder.</li>
           <li><b>☰ → Load converter settings</b> (top-right corner) brings in a backup from the old converter. It <b>replaces</b> the converter's accounts and rules and <b>adds</b> its payees.</li>
         </ul>
         <p><b>Giving the program to someone else:</b></p>
@@ -712,14 +712,14 @@ function defaultSettings(){
 }
 
 let storageOK = true;
-const KK = window.__KK || {};   // master lists + receipts from KellerKraft Receipts
+const KK = window.__KK || {};   // master lists + receipts from Time Saver
 function loadSettings(){
   const s = (KK.settings && validSettings(KK.settings)) ? KK.settings : defaultSettings();
   s.vendorList = (KK.payees||[]).map(p=>({name:p.name, words:(p.words||[]).slice()}));
   if(typeof KK.useNames==='boolean') s.useVendorList = KK.useNames;
   return normalize(s);
 }
-// Saved in the KellerKraft Receipts program. Payees are the shared master list.
+// Saved in the Time Saver program. Payees are the shared master list.
 let saveT = null, lastPayees = null;
 function saveSettings(){ clearTimeout(saveT); saveT = setTimeout(pushSettings, 250); }
 async function pushSettings(){
@@ -1640,7 +1640,7 @@ $('btnExcel').addEventListener('click',()=>{
 /* ---------------- Backup / restore / help ---------------- */
 $('btnBackup').addEventListener('click',()=>{
   const d = new Date(), p=n=>String(n).padStart(2,'0');
-  downloadFile(`kellerkraft-settings_${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}.json`, JSON.stringify(S,null,2), 'application/json');
+  downloadFile(`timesaver-settings_${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}.json`, JSON.stringify(S,null,2), 'application/json');
 });
 $('btnRestore').addEventListener('click',()=>$('restoreInput').click());
 $('restoreInput').addEventListener('change', async e=>{
@@ -1713,7 +1713,7 @@ window.KKReady = true;
 </script>
 <script>
 fetch('/local/converter', { cache:'no-store' }).then(r => r.json()).then(d => { window.__KK = d; window.__startConverter(); })
-  .catch(() => { document.body.innerHTML = '<p style="padding:30px;font:18px Segoe UI,sans-serif">Could not load the converter. Is KellerKraft Receipts running?</p>'; });
+  .catch(() => { document.body.innerHTML = '<p style="padding:30px;font:18px Segoe UI,sans-serif">Could not load the converter. Is Time Saver running?</p>'; });
 </script>
 </body>
 </html>

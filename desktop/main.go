@@ -1,6 +1,6 @@
 package main
 
-// KellerKraft Receipts — Windows program.
+// Time Saver — Windows program.
 // • Receives receipts from the iPhone app over your home Wi-Fi (HTTPS, port 8443)
 // • Shows them in your web browser at http://localhost:8780 (only on this computer)
 // Nothing is sent to the internet.
@@ -32,7 +32,7 @@ import (
 )
 
 const (
-	appVersion = "0.3.7"
+	appVersion = "0.4.0"
 	httpPort   = 8780 // dashboard + phone setup page
 	httpsPort  = 8443 // phone sync
 	phoneApp   = "https://killokreator.github.io/receipt-tracker/"
@@ -56,15 +56,18 @@ var (
 
 func main() {
 	home, _ := os.UserHomeDir()
-	dataDir = filepath.Join(home, "Documents", "KellerKraft Receipts")
+	docs := filepath.Join(home, "Documents")
+	dataDir = filepath.Join(docs, "Time Saver")
 	if d := os.Getenv("KK_RECEIPTS_DIR"); d != "" {
 		dataDir = d
+	} else {
+		moveOldDataFolder(docs, dataDir)
 	}
 	os.MkdirAll(dataDir, 0755)
 	if f, err := os.OpenFile(filepath.Join(dataDir, "log.txt"), os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644); err == nil {
 		log.SetOutput(io.MultiWriter(f, os.Stderr))
 	}
-	log.Printf("KellerKraft Receipts %s starting, data folder %s", appVersion, dataDir)
+	log.Printf("Time Saver %s starting, data folder %s", appVersion, dataDir)
 
 	// Already running? Just open the dashboard.
 	ln, err := net.Listen("tcp", fmt.Sprintf(":%d", httpPort))
@@ -150,6 +153,30 @@ func ocrDir() string {
 		}
 	}
 	return ""
+}
+
+// Earlier versions kept the data in a differently named folder in Documents.
+// Find it (it has data.json + certs\ca.crt) and rename it to the new name, once.
+func moveOldDataFolder(docs, newDir string) {
+	if _, err := os.Stat(newDir); err == nil {
+		return
+	}
+	entries, _ := os.ReadDir(docs)
+	for _, e := range entries {
+		if !e.IsDir() {
+			continue
+		}
+		old := filepath.Join(docs, e.Name())
+		_, err1 := os.Stat(filepath.Join(old, "data.json"))
+		_, err2 := os.Stat(filepath.Join(old, "certs", "ca.crt"))
+		if err1 == nil && err2 == nil {
+			if err := os.Rename(old, newDir); err != nil {
+				log.Printf("could not rename %s: %v (using it as it is)", old, err)
+				dataDir = old
+			}
+			return
+		}
+	}
 }
 
 // Version of the copy that is already running ("" if it can't be asked)
@@ -247,7 +274,8 @@ func phoneAPI() http.Handler {
 	})
 	mux.HandleFunc("/api/lists", authed(func(w http.ResponseWriter, r *http.Request) {
 		store.mu.Lock()
-		d := map[string]any{"customers": nz(store.data.Customers), "categories": nz(store.data.Categories), "payees": store.data.Payees, "useNames": store.data.UseNames}
+		d := map[string]any{"customers": nz(store.data.Customers), "categories": nz(store.data.Categories), "payees": store.data.Payees, "useNames": store.data.UseNames,
+			"company": store.data.Company.Name}
 		if store.data.Payees == nil {
 			d["payees"] = []Payee{}
 		}
@@ -335,7 +363,7 @@ func phoneAPI() http.Handler {
 	}))
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		fmt.Fprint(w, `<!doctype html><meta name=viewport content="width=device-width"><body style="font:18px -apple-system,sans-serif;padding:24px"><h2>✓ Secure connection works</h2><p>Your iPhone trusts this computer. Go back to the KK Receipts app.</p>`)
+		fmt.Fprint(w, `<!doctype html><meta name=viewport content="width=device-width"><body style="font:18px -apple-system,sans-serif;padding:24px"><h2>✓ Secure connection works</h2><p>Your iPhone trusts this computer. Go back to the Receipts app.</p>`)
 	})
 	// Every reply allows the phone app's web address to call in (requests still need the phone's key)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -489,7 +517,7 @@ func localSite() http.Handler {
 	}))
 	// scripts used by the dashboard (PDF reader etc.), built into this program
 	// The receipt-reading engine is NOT built into this program (a large built-in engine makes
-	// virus scanners suspicious). It ships as an "ocr" folder next to KellerKraft-Receipts.exe.
+	// virus scanners suspicious). It ships as an "ocr" folder next to TimeSaver.exe.
 	mux.HandleFunc("/assets/vendor/tesseract/", local(func(w http.ResponseWriter, r *http.Request) {
 		name := strings.TrimPrefix(r.URL.Path, "/assets/vendor/tesseract/")
 		if strings.Contains(name, "..") || name == "" {
@@ -527,7 +555,7 @@ func localSite() http.Handler {
 	}))
 	mux.HandleFunc("/ca.crt", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/x-x509-ca-cert")
-		w.Header().Set("Content-Disposition", `attachment; filename="KellerKraft-Receipts.crt"`)
+		w.Header().Set("Content-Disposition", `attachment; filename="TimeSaver.crt"`)
 		w.Write(ca.caDER)
 	})
 	mux.HandleFunc("/qr.png", local(func(w http.ResponseWriter, r *http.Request) {
@@ -649,6 +677,7 @@ func localSite() http.Handler {
 		resp := map[string]any{
 			"version": appVersion, "dataDir": dataDir, "ips": ips, "addrs": addrs, "httpPort": httpPort, "httpsPort": httpsPort,
 			"pairCode": code, "pairExpires": exp.UnixMilli(), "phoneApp": phoneApp, "devices": len(store.data.Devices),
+			"company":  store.data.Company,
 			"receipts": rs, "customers": nz(store.data.Customers), "categories": nz(store.data.Categories),
 			"payees": store.data.Payees, "useNames": store.data.UseNames,
 			"lastSync": func() int64 {
@@ -861,6 +890,74 @@ func localSite() http.Handler {
 		}
 		writeJSON(w, 200, netCheck())
 	}))
+	// Company setup (name + logo)
+	mux.HandleFunc("/local/company", local(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost {
+			r.Body = http.MaxBytesReader(w, r.Body, 12<<20)
+			if err := r.ParseMultipartForm(12 << 20); err != nil {
+				jsonErr(w, 400, "bad request")
+				return
+			}
+			store.mu.Lock()
+			defer store.mu.Unlock()
+			store.data.Company.Name = strings.Join(strings.Fields(r.FormValue("name")), " ")
+			if r.FormValue("removeLogo") == "1" && store.data.Company.Logo != "" {
+				os.Remove(filepath.Join(store.dir, store.data.Company.Logo))
+				store.data.Company.Logo = ""
+			}
+			if f, hdr, err := r.FormFile("logo"); err == nil {
+				defer f.Close()
+				ext := strings.ToLower(filepath.Ext(hdr.Filename))
+				if ext != ".png" && ext != ".jpg" && ext != ".jpeg" {
+					jsonErr(w, 400, "The logo must be a PNG or JPG picture")
+					return
+				}
+				if ext == ".jpeg" {
+					ext = ".jpg"
+				}
+				if store.data.Company.Logo != "" {
+					os.Remove(filepath.Join(store.dir, store.data.Company.Logo))
+				}
+				name := "logo" + ext
+				out, err := os.Create(filepath.Join(store.dir, name))
+				if err == nil {
+					_, err = io.Copy(out, f)
+					out.Close()
+				}
+				if err != nil {
+					jsonErr(w, 500, "could not save the logo: "+err.Error())
+					return
+				}
+				store.data.Company.Logo = name
+			}
+			if err := store.save(); err != nil {
+				jsonErr(w, 500, err.Error())
+				return
+			}
+		} else {
+			store.mu.Lock()
+			defer store.mu.Unlock()
+		}
+		writeJSON(w, 200, store.data.Company)
+	}))
+	mux.HandleFunc("/logo", local(func(w http.ResponseWriter, r *http.Request) {
+		store.mu.Lock()
+		logo := store.data.Company.Logo
+		store.mu.Unlock()
+		if logo == "" {
+			http.NotFound(w, r)
+			return
+		}
+		w.Header().Set("Cache-Control", "no-cache")
+		http.ServeFile(w, r, filepath.Join(store.dir, logo))
+	}))
+	// the company name for the phone setup page (shown on the iPhone)
+	mux.HandleFunc("/company.json", func(w http.ResponseWriter, r *http.Request) {
+		store.mu.Lock()
+		name := store.data.Company.Name
+		store.mu.Unlock()
+		writeJSON(w, 200, map[string]string{"name": name})
+	})
 	mux.HandleFunc("/local/openfolder", local(func(w http.ResponseWriter, r *http.Request) {
 		openFolder(dataDir)
 		writeJSON(w, 200, map[string]bool{"ok": true})

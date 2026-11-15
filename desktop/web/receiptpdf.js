@@ -27,7 +27,8 @@ const ReceiptPDF = (() => {
   const bytes = s => { const u = new Uint8Array(s.length); for (let i = 0; i < s.length; i++) u[i] = s.charCodeAt(i) & 255; return u; };
 
   /* receipts: [{date, payee, total, note, category, image: Uint8Array (jpeg) | null}] */
-  function build({ title, receipts, perPage = 2 }) {
+  /* header: { company, subtitle, logo: { bytes (jpeg), w, h } } shown at the top of every page */
+  function build({ title, receipts, perPage = 2, header = null }) {
     const objs = [];                                  // each: array of parts (string | Uint8Array)
     const add = parts => { objs.push(parts); return objs.length; };
     const fontR = add(['<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>']);
@@ -41,12 +42,32 @@ const ReceiptPDF = (() => {
     // ---- receipt pages: each scan with just its date above it
     const grid = { 1: [1, 1], 2: [2, 1], 4: [2, 2], 6: [3, 2] }[perPage] || [2, 1];
     const [nc, nr] = grid, gap = 16, dateH = perPage >= 6 ? 16 : 20, dateSize = perPage >= 6 ? 10 : 12;
-    const cw = (W - 2 * M - gap * (nc - 1)) / nc, ch = (H - 2 * M - gap * (nr - 1)) / nr;
+    // page heading: logo + company name, then "(customer) receipts · dates"
+    let headH = 0, logoId = null, lw = 0, lh = 0;
+    if (header) {
+      if (header.logo && header.logo.bytes) {
+        logoId = add(['<< /Type /XObject /Subtype /Image /Width ' + header.logo.w + ' /Height ' + header.logo.h + ' /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ' + header.logo.bytes.length + ' >>\nstream\n', header.logo.bytes, '\nendstream']);
+        const sc = Math.min(46 / header.logo.h, 150 / header.logo.w); lw = header.logo.w * sc; lh = header.logo.h * sc;
+      }
+      headH = Math.max(lh, header.company ? 22 : 0) + (header.subtitle ? 20 : 0) + 14;
+    }
+    const drawHeader = (ops, images) => {
+      if (!header) return;
+      let y = H - M;
+      const tx = logoId ? M + lw + 12 : M;
+      if (logoId) { images.push({ name: 'Logo', id: logoId }); ops.push(`q ${lw.toFixed(2)} 0 0 ${lh.toFixed(2)} ${M} ${(y - lh).toFixed(2)} cm /Logo Do Q`); }
+      if (header.company) ops.push(`BT /FB 16 Tf ${tx} ${(y - (logoId ? lh / 2 + 6 : 14)).toFixed(2)} Td ${pdfStr(header.company)} Tj ET`);
+      y -= Math.max(lh, header.company ? 22 : 0);
+      if (header.subtitle) { y -= 16; ops.push(`BT /FR 11 Tf 0.25 g ${M} ${y.toFixed(2)} Td ${pdfStr(header.subtitle)} Tj ET 0 g`); }
+      y -= 6; ops.push(`0.7 G 0.6 w ${M} ${y.toFixed(2)} m ${W - M} ${y.toFixed(2)} l S 0 G`);
+    };
+    const cw = (W - 2 * M - gap * (nc - 1)) / nc, ch = (H - 2 * M - headH - gap * (nr - 1)) / nr;
     for (let s = 0; s < receipts.length; s += perPage) {
       const ops = [], images = [];
+      drawHeader(ops, images);
       receipts.slice(s, s + perPage).forEach((r, k) => {
         const col = k % nc, row = Math.floor(k / nc);
-        const x0 = M + col * (cw + gap), yTop = H - M - row * (ch + gap);
+        const x0 = M + col * (cw + gap), yTop = H - M - headH - row * (ch + gap);
         ops.push(`BT /FB ${dateSize} Tf ${x0} ${yTop - dateSize} Td ${pdfStr(fmtDate(r.date) || 'No date')} Tj ET`);
         const boxTop = yTop - dateH, boxH = ch - dateH;
         if (r.image) {
@@ -74,7 +95,7 @@ const ReceiptPDF = (() => {
     });
     objs[pagesId - 1] = [`<< /Type /Pages /Kids [${pageIds.map(i => i + ' 0 R').join(' ')}] /Count ${pageIds.length} >>`];
     const catalog = add([`<< /Type /Catalog /Pages ${pagesId} 0 R >>`]);
-    const info = add([`<< /Title ${pdfStr(title)} /Producer (KellerKraft Time Saver) >>`]);
+    const info = add([`<< /Title ${pdfStr(title)} /Producer (Time Saver) >>`]);
 
     // write the file
     const out = [bytes('%PDF-1.4\n%\xE2\xE3\xCF\xD3\n')];

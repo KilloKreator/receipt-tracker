@@ -1,7 +1,7 @@
 package main
 
 // Receipt storage: one data.json file + a folder of receipt images, in
-// Documents\KellerKraft Receipts. Easy to back up: copy the whole folder.
+// Documents\Time Saver. Easy to back up: copy the whole folder.
 
 import (
 	"encoding/json"
@@ -43,6 +43,11 @@ type Receipt struct {
 	Original string `json:"original,omitempty"`
 }
 
+type Company struct {
+	Name string `json:"name"`
+	Logo string `json:"logo,omitempty"` // file name in the data folder, e.g. "logo.png"
+}
+
 type Device struct {
 	Token   string `json:"token"`
 	Name    string `json:"name"`
@@ -56,6 +61,8 @@ type Data struct {
 	Payees     []Payee    `json:"payees"`
 	UseNames   bool       `json:"useNames"`
 	Devices    []Device   `json:"devices"`
+	// Company setup: name + logo file (shown in the header, on the phone and on PDFs)
+	Company Company `json:"company"`
 	// IIF converter settings (accounts, category rules, export history). Payees above are the master list.
 	Converter json.RawMessage `json:"converter,omitempty"`
 }

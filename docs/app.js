@@ -1,6 +1,6 @@
-/* KellerKraft Receipts — phone app */
+/* Time Saver — phone app */
 'use strict';
-const VERSION = '0.1.6';
+const VERSION = '0.1.7';
 const DEFAULT_CATEGORY = 'Uncategorized Expenses';
 const $ = id => document.getElementById(id);
 const norm = s => String(s == null ? '' : s).replace(/\s+/g, ' ').trim();
@@ -440,7 +440,7 @@ async function api(method, path, body, timeoutMs = 15000) {
     const x = new Error('unreachable'); x.unreachable = true; throw x;
   } finally { clearTimeout(t); }
 }
-const UNREACHABLE = "Can't reach your computer. Check that:\n• this phone is on your home Wi-Fi\n• KellerKraft Receipts is running on the computer\n• the address is right\n• the security certificate is installed and trusted (Phone setup, step 1)";
+const UNREACHABLE = "Can't reach your computer. Check that:\n• this phone is on your home Wi-Fi\n• Time Saver is running on the computer\n• the address is right\n• the security certificate is installed and trusted (Phone setup, step 1)";
 
 async function sync(manual) {
   if (syncing) return;
@@ -466,6 +466,8 @@ async function sync(manual) {
     lists.customers = sortNames(l.customers || []);
     lists.categories = sortNames(l.categories || []);
     lists.payees = l.payees || [];
+    lists.company = l.company || '';
+    showCompany();
     if (typeof l.useNames === 'boolean') settings.names = l.useNames;
     settings.lastListSync = Date.now(); await saveSettings(); await saveLists();
     refreshPayeeList();
@@ -494,7 +496,7 @@ async function openSettings() {
     const waiting = all.filter(r => !r.synced).length;
     $('storeInfo').textContent = `${all.length} receipts on this phone (about ${Math.round((est.usage || 0) / 1048576)} MB)` + (waiting ? `. ${waiting} not synced yet: they are only on this phone.` : '. All are also on your computer.');
   } catch (e) { $('storeInfo').textContent = ''; }
-  $('version').textContent = 'KK Receipts ' + VERSION;
+  $('version').textContent = 'Receipts ' + VERSION;
   show('settings');
 }
 $('btnSettings').onclick = openSettings;
@@ -543,6 +545,9 @@ $('btnClean').onclick = async () => {
   openSettings();
 };
 
+/* company name (from Company setup on the computer) */
+function showCompany() { $('coName').textContent = lists.company ? lists.company : 'Time Saver'; }
+
 /* ---------- start ---------- */
 (async () => {
   try {
@@ -551,6 +556,7 @@ $('btnClean').onclick = async () => {
     lists.pending = lists.pending || { customers: [], categories: [] };
   } catch (e) { alert('This phone is not letting the app save data. Please open it from the Home Screen icon.'); }
   refreshPayeeList();
+  showCompany();
   renderHome();
   if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
   if ('serviceWorker' in navigator && location.protocol === 'https:') {

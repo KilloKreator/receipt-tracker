@@ -1,4 +1,4 @@
-/* KellerKraft Receipts — pull the date, total and payee out of the receipt text */
+/* Time Saver — pull the date, total and payee out of the receipt text */
 'use strict';
 const Parse = (() => {
   const MONTHS = { jan: 1, feb: 2, mar: 3, apr: 4, may: 5, jun: 6, jul: 7, aug: 8, sep: 9, sept: 9, oct: 10, nov: 11, dec: 12 };
@@ -76,7 +76,7 @@ const Parse = (() => {
     return best;
   }
 
-  // ---- payee matching (same logic as the KellerKraft Time Saver converter) ----
+  // ---- payee matching (same logic as the Time Saver converter) ----
   const tokens = s => lc(s).replace(/['’`]/g, '').split(/[^a-z0-9]+/).filter(Boolean);
   function nameIn(vt, dt) {
     if (!vt.length) return false;

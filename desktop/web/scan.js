@@ -1,4 +1,4 @@
-/* KellerKraft Receipts — document scanning (runs fully on the phone, no internet)
+/* Time Saver — document scanning (runs fully on the phone, no internet)
    1. find the receipt's 4 corners in the photo
    2. straighten it (perspective correction)
    3. make it look like a clean black & white scan (like iOS Notes)            */

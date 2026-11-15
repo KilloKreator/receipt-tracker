@@ -1,7 +1,7 @@
 {
-  "name": "KK Receipts",
-  "short_name": "KK Receipts",
-  "description": "KellerKraft receipt scanner",
+  "name": "Time Saver Receipts",
+  "short_name": "Receipts",
+  "description": "Receipt scanner",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",

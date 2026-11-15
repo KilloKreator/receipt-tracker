@@ -28,7 +28,7 @@ func shellOpen(target string) {
 func hideWindow(cmd *exec.Cmd) {}
 
 func showError(msg string) {
-	t, _ := syscall.UTF16PtrFromString("KellerKraft Time Saver")
+	t, _ := syscall.UTF16PtrFromString("Time Saver")
 	m, _ := syscall.UTF16PtrFromString(msg)
 	messageBox.Call(0, uintptr(unsafe.Pointer(m)), uintptr(unsafe.Pointer(t)), 0x10)
 }

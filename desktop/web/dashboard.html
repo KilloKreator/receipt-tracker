@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>KellerKraft Time Saver</title>
+<title>Time Saver</title>
 <style>
 :root{--bg:#f4f6f8;--card:#fff;--text:#1d2329;--muted:#5d6873;--line:#dde2e7;--accent:#1f6feb;--accent-text:#fff;--soft:#e7f0fd;
   --good:#1a7f37;--good-soft:#e6f4ea;--warn:#9a6700;--warn-soft:#fff4d6;--bad:#c62828;--bad-soft:#fdecec;--input:#fff}
@@ -74,6 +74,8 @@ input[type=checkbox]{width:17px;height:17px;accent-color:var(--accent)}
 .ok{color:var(--good);font-weight:600}.bad{color:var(--bad);font-weight:600}
 .toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#222;color:#fff;padding:10px 16px;border-radius:10px;z-index:50}
 .hidden{display:none!important}
+.brand{display:flex;gap:14px;align-items:center}
+#brandLogo{max-height:64px;max-width:180px;object-fit:contain}
 .fcard .fof{font-size:11px;font-weight:400;color:var(--muted);text-align:right}
 .tobill{font-size:14px;font-weight:600;color:var(--muted)}
 .billsub{font-size:12px;font-weight:400;color:var(--muted);text-align:right}
@@ -133,10 +135,13 @@ tr.picked td{background:var(--soft)}
 </style></head>
 <body><div class="wrap">
 <header>
-  <div>
-    <h1>KellerKraft Time Saver</h1>
+  <div class="brand">
+    <img id="brandLogo" class="hidden" alt="">
+    <div>
+    <h1 id="brandName">Time Saver</h1>
     <div class="sub">Receipt Tracker · CSV-IIF Converter</div>
     <div class="quote">“Just looking out for a Pops I love”</div>
+    </div>
   </div>
   <div class="tools">
     <div class="row">
@@ -146,6 +151,7 @@ tr.picked td{background:var(--soft)}
         <div class="menu hidden" id="menu" role="menu">
           <button role="menuitem" id="bSetup">📱 Phone setup</button>
           <button role="menuitem" id="mLoad">⬆ Load converter settings…</button>
+          <button role="menuitem" id="mCompany">🏢 Company setup</button>
           <button role="menuitem" id="mHelp">📘 Converter tutorial</button>
           <button role="menuitem" id="bSettings">⚙ Settings</button>
         </div>
@@ -240,8 +246,8 @@ tr.picked td{background:var(--soft)}
       <div>
         <ol>
           <li>On the iPhone, open <b>Safari</b> and type <b id="setupUrl"></b> (or point the Camera at this code). The iPhone must be on the same Wi-Fi.<br><span class="muted">Use <b>Safari</b> for this setup, even if you normally use Chrome. Only Safari can install the security certificate.</span></li>
-          <li>Follow the steps on the phone: <b>install the security certificate</b>, then <b>add KK Receipts to the Home Screen</b>.</li>
-          <li>In KK Receipts tap <b>⚙︎</b> and enter:</li>
+          <li>Follow the steps on the phone: <b>install the security certificate</b>, then <b>add Receipts to the Home Screen</b>.</li>
+          <li>In Receipts tap <b>⚙︎</b> and enter:</li>
         </ol>
         <div class="muted">Computer address</div><div class="code" id="addrBig" style="font-size:26px;letter-spacing:1px"></div>
         <div class="muted" style="margin-top:8px">Code</div><div class="code" id="codeBig"></div>
@@ -253,12 +259,12 @@ tr.picked td{background:var(--soft)}
       <b>🔌 Connection check</b> <span class="muted" id="netSummary">checking…</span>
       <ul id="netList" class="muted" style="margin:6px 0 4px;padding-left:20px"></ul>
       <div class="row"><button type="button" class="primary" id="bNetFix">🔧 Fix Windows network settings</button><button type="button" class="small" id="bNetRe">Check again</button></div>
-      <p class="muted" style="margin:6px 0 0">The fix sets your home network to <b>Private</b> and lets KellerKraft Receipts through Windows Firewall. Windows will ask <i>"Do you want to allow this app to make changes?"</i>. Click <b>Yes</b>.</p>
+      <p class="muted" style="margin:6px 0 0">The fix sets your home network to <b>Private</b> and lets Time Saver through Windows Firewall. Windows will ask <i>"Do you want to allow this app to make changes?"</i>. Click <b>Yes</b>.</p>
     </div>
     <details style="margin-top:10px" open><summary class="muted">Phone can't connect?</summary>
       <ul class="muted">
         <li><b>Set your home Wi-Fi to Private:</b> click the Wi-Fi icon by the clock → <b>Properties</b> under your network → <b>Network profile: Private</b>.</li>
-        <li><b>Let the program through Windows Firewall:</b> Start → type <b>Allow an app through Windows Firewall</b> → <b>Change settings</b> → tick <b>Private</b> next to KellerKraft-Receipts. If it's not listed: <b>Allow another app… → Browse</b> → choose KellerKraft-Receipts.exe → <b>Add</b>.</li>
+        <li><b>Let the program through Windows Firewall:</b> Start → type <b>Allow an app through Windows Firewall</b> → <b>Change settings</b> → tick <b>Private</b> next to TimeSaver. If it's not listed: <b>Allow another app… → Browse</b> → choose TimeSaver.exe → <b>Add</b>.</li>
         <li>The iPhone must be on the <b>same Wi-Fi</b> as this computer, not a guest network.</li>
         <li>Try the other addresses for this computer listed above, if there are any.</li>
         <li>Some routers block devices from seeing each other ("AP isolation" / "client isolation"). If nothing works, check the router's settings.</li>
@@ -293,21 +299,35 @@ tr.picked td{background:var(--soft)}
       <p class="muted">One payee per line. Optional auto-select words go after a <b>|</b>, separated by commas, e.g. <code>The Home Depot | HOME DEPOT, HOMEDEPOT</code>.</p>
       <div class="row" style="margin-bottom:8px">
         <button type="button" data-qbimport="tPay">📄 Import from QuickBooks report…</button>
-        <button type="button" id="bImport">⬆ Import from KellerKraft Time Saver…</button>
+        <button type="button" id="bImport">⬆ Import from Time Saver…</button>
         <input type="file" id="importFile" accept=".json,application/json" class="hidden">
         <label class="check"><input type="checkbox" id="cNames"> Also pick a payee when its name is on the receipt</label>
       </div>
       <textarea id="tPay" rows="14"></textarea>
-      <p class="muted"><b>QuickBooks report:</b> Vendor Contact List (PDF or CSV). <b>KellerKraft Time Saver:</b> click <b>Back up settings</b> there, then choose that file here. It also brings the auto-select words (e.g. HOME DEPOT → The Home Depot).</p>
+      <p class="muted"><b>QuickBooks report:</b> Vendor Contact List (PDF or CSV). <b>Time Saver:</b> click <b>Back up settings</b> there, then choose that file here. It also brings the auto-select words (e.g. HOME DEPOT → The Home Depot).</p>
     </div>
   </div>
   <div class="df"><span class="muted">Lists are copied to the phone each time it syncs.</span><div class="row"><button type="button" data-close>Cancel</button><button type="button" class="primary" id="bSaveLists">Save lists</button></div></div>
 </dialog>
 
+<!-- company setup -->
+<dialog id="dCompany" class="narrow"><div class="dh"><h3>🏢 Company setup</h3><button type="button" class="small" data-close>✕</button></div>
+  <div class="db">
+    <p class="muted" style="margin-top:0">Your company name and logo appear at the top of this program, on the phone, and on receipt PDFs. They're saved only on this computer.</p>
+    <div class="field"><label for="coName">Company name</label><input type="text" id="coName" placeholder="e.g. Smith Construction LLC" autocomplete="organization"></div>
+    <div class="field"><label>Logo <span class="muted">(PNG or JPG)</span></label>
+      <div class="row"><img id="coLogo" class="hidden" alt="Logo" style="max-height:70px;max-width:200px;border:1px solid var(--line);border-radius:6px;padding:4px;background:#fff">
+        <button type="button" id="coPick">Choose logo…</button><button type="button" class="danger hidden" id="coRemove">Remove logo</button></div>
+      <input type="file" id="coFile" accept="image/png,image/jpeg,.png,.jpg,.jpeg" class="hidden">
+    </div>
+  </div>
+  <div class="df"><span></span><div class="row"><button type="button" data-close>Cancel</button><button type="button" class="primary" id="coSave">Save</button></div></div>
+</dialog>
+
 <!-- settings -->
 <dialog id="dSettings" class="narrow"><div class="dh"><h3>⚙ Settings</h3><button type="button" class="small" data-close>✕</button></div>
   <div class="db">
-    <p><b>Syncing the phone:</b> the phone sends its receipts while this program is open. Open the program, then open KK Receipts on the phone (or tap ⟳ Sync).</p>
+    <p><b>Syncing the phone:</b> the phone sends its receipts while this program is open. Open the program, then open Receipts on the phone (or tap ⟳ Sync).</p>
     <p><b>Your receipts are saved in:</b><br><span class="muted" id="dirText"></span><br><button type="button" id="bFolder" style="margin-top:6px">📁 Open folder</button></p>
     <p class="muted">To back up, copy that whole folder (for example to a USB stick).</p>
     <p class="muted" id="verText"></p>
@@ -378,7 +398,8 @@ function render() {
   fill('payeeList', S.payees.map(p => p.name)); fill('custList', S.customers); fill('catList', S.categories);
   renderFolders();
   if (curCust !== null) renderCustomer();
-  $('foot').textContent = `KellerKraft Time Saver ${S.version} · Saved in ${S.dataDir}`;
+  $('foot').textContent = `Time Saver ${S.version} · Saved in ${S.dataDir}`;
+  renderBrand();
 }
 const sumOf = rs => rs.reduce((s, r) => s + (r.total || 0), 0);
 const toBill = rs => rs.filter(r => !r.billedAt);
@@ -567,7 +588,8 @@ $('bSaveSel').onclick = async () => {
 };
 /* PDF of the ticked receipts */
 $('bPDF').onclick = async () => {
-  const rs = S.receipts.filter(r => selected.has(r.id)).sort((a, b) => (a.date || '').localeCompare(b.date || ''));
+  // always oldest first (date, then the order they were scanned)
+  const rs = S.receipts.filter(r => selected.has(r.id)).sort((a, b) => (a.date || '').localeCompare(b.date || '') || (a.created || 0) - (b.created || 0));
   if (!rs.length) return;
   const done = rs.filter(r => r.pdfAt);
   if (done.length && !confirm(`${done.length} of the ${rs.length} selected receipt${rs.length === 1 ? ' is' : 's are'} already in a PDF:\n\n` +
@@ -587,7 +609,11 @@ $('bPDF').onclick = async () => {
       if (r.hasImage) image = new Uint8Array(await (await fetch(`/img/${r.id}.jpg`)).arrayBuffer());
       items.push({ date: r.date, payee: r.payee || r.memo, total: r.total, note: r.note, category: r.category, image });
     }
-    const blob = ReceiptPDF.build({ title: `${label} — Receipts`, receipts: items, perPage: +$('perPage').value });
+    const dates = rs.map(r => r.date).filter(Boolean);
+    const range = dates.length ? (fmtDate(dates[0]) + (dates[dates.length - 1] !== dates[0] ? ' – ' + fmtDate(dates[dates.length - 1]) : '')) : '';
+    const who = curCust === '(all)' ? 'All customers' : curCust === '(none)' ? 'Receipts with no customer' : curCust;
+    const header = { company: ((S.company || {}).name) || '', logo: await logoForPDF(), subtitle: `${who}${curCust === '(none)' ? '' : ' receipts'}${range ? ' · ' + range : ''}` };
+    const blob = ReceiptPDF.build({ title: `${label} — Receipts`, receipts: items, perPage: +$('perPage').value, header });
     let saved = name;
     if (handle) { const w = await handle.createWritable(); await w.write(blob); await w.close(); saved = handle.name; msgSave('good', `✓ Saved "${handle.name}" (${plural(rs.length, 'receipt')}, ${money(sumOf(rs))}). They're now marked 📄 In PDF and ✓ Billed.`); }
     else { const a = el('a', { href: URL.createObjectURL(blob), download: name }); document.body.append(a); a.click(); a.remove(); msgSave('good', `✓ Saved "${name}" to your Downloads folder. They're now marked 📄 In PDF and ✓ Billed.`); }
@@ -599,6 +625,55 @@ $('bPDF').onclick = async () => {
 };
 try { const pp = localStorage.getItem('kk.perPage'); if (pp) $('perPage').value = pp; } catch (e) {}
 $('perPage').onchange = () => { try { localStorage.setItem('kk.perPage', $('perPage').value); } catch (e) {} };
+
+/* company name + logo */
+function renderBrand() {
+  const co = (S && S.company) || {};
+  const title = co.name ? `${co.name} Time Saver` : 'Time Saver';
+  $('brandName').textContent = title; document.title = title;
+  const want = co.logo ? '/logo?v=' + encodeURIComponent(co.logo + (S.logoV || '')) : '';
+  $('brandLogo').classList.toggle('hidden', !want);
+  if (want && $('brandLogo').getAttribute('src') !== want) $('brandLogo').src = want;
+}
+let coNewLogo = null, coRemove = false;
+$('mCompany').onclick = () => {
+  const co = (S && S.company) || {};
+  $('coName').value = co.name || ''; coNewLogo = null; coRemove = false;
+  $('coLogo').classList.toggle('hidden', !co.logo); if (co.logo) $('coLogo').src = '/logo?v=' + Date.now();
+  $('coRemove').classList.toggle('hidden', !co.logo);
+  $('dCompany').showModal(); $('coName').focus();
+};
+$('coPick').onclick = () => $('coFile').click();
+$('coFile').onchange = e => {
+  const f = e.target.files[0]; e.target.value = ''; if (!f) return;
+  if (!/\.(png|jpe?g)$/i.test(f.name)) { alert('Please choose a PNG or JPG picture.'); return; }
+  coNewLogo = f; coRemove = false;
+  $('coLogo').src = URL.createObjectURL(f); $('coLogo').classList.remove('hidden'); $('coRemove').classList.remove('hidden');
+};
+$('coRemove').onclick = () => { coNewLogo = null; coRemove = true; $('coLogo').classList.add('hidden'); $('coRemove').classList.add('hidden'); };
+$('coSave').onclick = async () => {
+  const fd = new FormData();
+  fd.append('name', norm($('coName').value));
+  if (coRemove) fd.append('removeLogo', '1');
+  if (coNewLogo) fd.append('logo', coNewLogo, coNewLogo.name);
+  try {
+    const r = await fetch('/local/company', { method: 'POST', headers: { 'X-KK': '1' }, body: fd });
+    const d = await r.json(); if (!r.ok) throw new Error(d.error || r.status);
+    S.company = d; S.logoV = Date.now(); renderBrand(); $('dCompany').close(); toast('Company setup saved ✓'); sig = ''; refresh();
+  } catch (e) { alert('Could not save: ' + e.message); }
+};
+/* logo as a JPEG for the PDF heading */
+async function logoForPDF() {
+  const co = (S && S.company) || {}; if (!co.logo) return null;
+  try {
+    const bmp = await createImageBitmap(await (await fetch('/logo?v=' + Date.now())).blob());
+    const k = Math.min(1, 600 / Math.max(bmp.width, bmp.height));
+    const c = document.createElement('canvas'); c.width = Math.max(1, Math.round(bmp.width * k)); c.height = Math.max(1, Math.round(bmp.height * k));
+    const ctx = c.getContext('2d'); ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, c.width, c.height); ctx.drawImage(bmp, 0, 0, c.width, c.height);
+    const b = await new Promise(res => c.toBlob(res, 'image/jpeg', 0.9));
+    return { bytes: new Uint8Array(await b.arrayBuffer()), w: c.width, h: c.height };
+  } catch (e) { return null; }
+}
 
 /* ☰ menu */
 function closeMenu() { $('menu').classList.add('hidden'); $('bMenu').setAttribute('aria-expanded', 'false'); }
@@ -618,7 +693,7 @@ $('mHelp').onclick = () => withConverter(w => w.KKOpenHelp());
 $('mLoad').onclick = () => $('loadFile').click();
 $('loadFile').onchange = async e => {
   const f = e.target.files[0]; e.target.value = ''; if (!f) return;
-  let data; try { data = JSON.parse(await f.text()); } catch (err) { alert("That file isn't a KellerKraft Time Saver settings backup."); return; }
+  let data; try { data = JSON.parse(await f.text()); } catch (err) { alert("That file isn't a Time Saver settings backup."); return; }
   withConverter(w => w.KKApplySettings(data, f.name));
 };
 
@@ -715,7 +790,7 @@ function fillCard(card) {
   card.querySelector('img').src = r.thumb;
   const found = ['date', 'total', 'payee'].filter(k => g[k] != null && g[k] !== '');
   card.querySelector('.ast').textContent = found.length ? `✓ Read the ${found.join(', ')}. Please check.`
-    : (!r.isPdf && ocrMissing ? 'Picture reading isn\'t installed (the "ocr" folder must be next to KellerKraft-Receipts.exe). Please fill it in.' : "Couldn't read this receipt clearly. Please fill it in.");
+    : (!r.isPdf && ocrMissing ? 'Picture reading isn\'t installed (the "ocr" folder must be next to TimeSaver.exe). Please fill it in.' : "Couldn't read this receipt clearly. Please fill it in.");
   const inp = (label, type, value, list, cls) => {
     const i = el('input', { type, autocomplete: 'off' }); i.value = value == null ? '' : value; if (list) i.setAttribute('list', list);
     const l = el('label', cls ? { class: cls } : null, label, i); return [l, i];
@@ -857,7 +932,7 @@ function showNet(n) {
   $('netSummary').innerHTML = n.ok ? '<span class="ok">✓ Windows is set up to let the phone connect</span>' : '<span class="bad">⚠ Windows may be blocking the phone</span>';
   (n.networks || []).forEach(x => list.append(el('li', null, `Network "${x.name}" (${x.adapter}): `, el('span', { class: x.category === 'Public' ? 'bad' : 'ok', text: x.category === 'Public' ? 'Public ⚠ (blocks the phone)' : x.category + ' ✓' }))));
   list.append(el('li', null, 'Windows Firewall permission: ', el('span', { class: n.allowRule ? 'ok' : 'bad', text: n.allowRule ? 'allowed ✓' : 'missing ⚠' })));
-  if (n.blockRules) list.append(el('li', null, el('span', { class: 'bad', text: `${n.blockRules} firewall rule(s) blocking KellerKraft Receipts ⚠` })));
+  if (n.blockRules) list.append(el('li', null, el('span', { class: 'bad', text: `${n.blockRules} firewall rule(s) blocking Time Saver ⚠` })));
   $('bNetFix').classList.toggle('hidden', !!n.ok);
 }
 async function netCheck() {
@@ -921,7 +996,7 @@ $('importFile').onchange = async e => {
     $('tPay').value = payText(cur.sort((a, b) => a.name.localeCompare(b.name)));
     if (typeof s.useVendorList === 'boolean') $('cNames').checked = s.useVendorList;
     await saveListsNow(`Imported ${vl.length} payees and saved ✓`);
-  } catch (err) { alert("That file isn't a KellerKraft Time Saver settings backup."); }
+  } catch (err) { alert("That file isn't a Time Saver settings backup."); }
 };
 // imports are saved right away (no need to click Save lists)
 async function saveListsNow(msgText) {
@@ -946,9 +1021,9 @@ $('bSettings').onclick = () => {
 
 $('bFolder').onclick = () => post('/local/openfolder');
 $('bQuit').onclick = async () => {
-  if (!confirm('Stop KellerKraft Receipts? The phone cannot sync until you start it again.')) return;
+  if (!confirm('Stop Time Saver? The phone cannot sync until you start it again.')) return;
   await post('/local/quit').catch(() => {});
-  document.body.innerHTML = '<div style="padding:40px;font:18px Segoe UI,sans-serif">KellerKraft Receipts has stopped. You can close this tab.</div>';
+  document.body.innerHTML = '<div style="padding:40px;font:18px Segoe UI,sans-serif">Time Saver has stopped. You can close this tab.</div>';
 };
 document.querySelectorAll('[data-close]').forEach(b => b.addEventListener('click', () => b.closest('dialog').close()));
 

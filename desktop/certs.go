@@ -58,7 +58,7 @@ func loadOrCreateCA(dir string) (*certs, error) {
 	host, _ := os.Hostname()
 	tpl := &x509.Certificate{
 		SerialNumber:          randSerial(),
-		Subject:               pkix.Name{CommonName: "KellerKraft Receipts (" + host + ")", Organization: []string{"KellerKraft Receipts"}},
+		Subject:               pkix.Name{CommonName: "Time Saver (" + host + ")", Organization: []string{"Time Saver"}},
 		NotBefore:             time.Now().Add(-24 * time.Hour),
 		NotAfter:              time.Now().AddDate(10, 0, 0),
 		IsCA:                  true,
@@ -94,7 +94,7 @@ func (c *certs) serverCert(ips []net.IP) (tls.Certificate, error) {
 	all := append([]net.IP{net.ParseIP("127.0.0.1")}, ips...)
 	tpl := &x509.Certificate{
 		SerialNumber: randSerial(),
-		Subject:      pkix.Name{CommonName: "KellerKraft Receipts", Organization: []string{"KellerKraft Receipts"}},
+		Subject:      pkix.Name{CommonName: "Time Saver", Organization: []string{"Time Saver"}},
 		NotBefore:    time.Now().Add(-24 * time.Hour),
 		NotAfter:     time.Now().AddDate(0, 0, 390),
 		KeyUsage:     x509.KeyUsageDigitalSignature,

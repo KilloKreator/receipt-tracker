@@ -1,4 +1,4 @@
-/* KellerKraft Receipts — storage on the phone (IndexedDB). Nothing leaves the phone except to your own computer. */
+/* Time Saver — storage on the phone (IndexedDB). Nothing leaves the phone except to your own computer. */
 'use strict';
 const DB = (() => {
   let dbp = null;
