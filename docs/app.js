@@ -1,6 +1,6 @@
 /* Time Saver — phone app */
 'use strict';
-const VERSION = '0.1.9';
+const VERSION = '0.2.0';
 const DEFAULT_CATEGORY = 'Uncategorized Expenses';
 const $ = id => document.getElementById(id);
 const norm = s => String(s == null ? '' : s).replace(/\s+/g, ' ').trim();
@@ -426,7 +426,61 @@ $('editDelete').onclick = async () => {
 // Just the computer's address, whatever was typed or pasted ("http://192.168.1.20:8780/setup" -> "192.168.1.20")
 function cleanAddr(a) { return norm(a).replace(/^https?:\/\//i, '').replace(/\/.*$/, '').replace(/:\d+$/, '').trim(); }
 function baseURL() { return 'https://' + cleanAddr(settings.addr) + ':8443'; }
-async function api(method, path, body, timeoutMs = 15000) {
+async function api(method, path, body, timeoutMs = 15000, opts = {}) {
+  try { return await apiOnce(method, path, body, timeoutMs); }
+  catch (e) {
+    // The computer may have been given a new address by the Wi-Fi router: look for it, then try once more
+    if (!e.unreachable || !settings.token || opts.noSearch) throw e;
+    const found = await findComputer(opts.manual);
+    if (!found) throw e;
+    return await apiOnce(method, path, body, timeoutMs);
+  }
+}
+
+/* Find this computer again after its address changed. Only the same home network is
+   searched (same first three numbers, e.g. 192.168.1.___). The computer is recognized by
+   the key it gave this phone, so another computer is never picked by mistake. */
+let searching = null, lastSearch = 0;
+function findComputer(manual) {
+  if (searching) return searching;
+  const m = cleanAddr(settings.addr).match(/^(\d{1,3}\.\d{1,3}\.\d{1,3})\.(\d{1,3})$/);
+  if (!m) return Promise.resolve(false);
+  if (!manual && Date.now() - lastSearch < 10 * 60e3) return Promise.resolve(false);   // computer probably just off
+  lastSearch = Date.now();
+  const prefix = m[1], old = +m[2];
+  searching = (async () => {
+    showSearching(true);
+    const tries = [];
+    for (let i = 1; i <= 254; i++) if (i !== old) tries.push(prefix + '.' + i);
+    const probe = async ip => {
+      const ctl = new AbortController(), t = setTimeout(() => ctl.abort(), 3000);
+      try {
+        const r = await fetch('https://' + ip + ':8443/api/lists', { headers: { Authorization: 'Bearer ' + settings.token }, signal: ctl.signal, cache: 'no-store' });
+        return r.ok;
+      } catch (e) { return false; } finally { clearTimeout(t); }
+    };
+    try {
+      for (let i = 0; i < tries.length; i += 32) {             // 32 at a time, a few seconds per group
+        const group = tries.slice(i, i + 32);
+        const ok = await Promise.all(group.map(probe));
+        const hit = group[ok.indexOf(true)];
+        if (hit) {
+          settings.addr = hit; await saveSettings();
+          toast('✓ Found your computer at its new address: ' + hit);
+          return true;
+        }
+      }
+      return false;
+    } finally { showSearching(false); searching = null; }
+  })();
+  return searching;
+}
+function showSearching(on) {
+  const b = $('btnSync'); if (!b) return;
+  if (on) { b.dataset.label = b.textContent; b.textContent = 'Looking for computer…'; }
+  else if (b.dataset.label) { b.textContent = b.dataset.label; delete b.dataset.label; }
+}
+async function apiOnce(method, path, body, timeoutMs = 15000) {
   const ctl = new AbortController(), t = setTimeout(() => ctl.abort(), timeoutMs);
   const headers = {};
   if (settings.token) headers.Authorization = 'Bearer ' + settings.token;
@@ -441,7 +495,7 @@ async function api(method, path, body, timeoutMs = 15000) {
     const x = new Error('unreachable'); x.unreachable = true; throw x;
   } finally { clearTimeout(t); }
 }
-const UNREACHABLE = "Can't reach your computer. Check that:\n• this phone is on your home Wi-Fi\n• Time Saver is running on the computer\n• the address is right\n• the security certificate is installed and trusted (Phone setup, step 1)";
+const UNREACHABLE = "Can't reach your computer (the phone also looked for it on your Wi-Fi). Check that:\n• this phone is on your home Wi-Fi\n• Time Saver is running on the computer\n• the security certificate is installed and trusted (Phone setup, step 1)";
 
 async function sync(manual) {
   if (syncing) return;
@@ -452,7 +506,7 @@ async function sync(manual) {
   let sent = 0;
   try {
     if (lists.pending.customers.length || lists.pending.categories.length) {
-      await api('POST', '/api/lists/add', { customers: lists.pending.customers, categories: lists.pending.categories }, manual ? 15000 : 5000);
+      await api('POST', '/api/lists/add', { customers: lists.pending.customers, categories: lists.pending.categories }, manual ? 15000 : 5000, { manual });
       lists.pending = { customers: [], categories: [] }; await saveLists();
     }
     for (const r of waiting) {
@@ -460,10 +514,10 @@ async function sync(manual) {
       const { image, thumb, ...meta } = r;
       fd.append('meta', JSON.stringify(meta));
       fd.append('image', image, r.id + '.jpg');
-      await api('POST', '/api/receipts', fd, 60000);
+      await api('POST', '/api/receipts', fd, 60000, { manual });
       r.synced = true; r.syncedAt = Date.now(); await DB.put(r); sent++;
     }
-    const l = await api('GET', '/api/lists');
+    const l = await api('GET', '/api/lists', null, 15000, { manual });
     lists.customers = sortNames(l.customers || []);
     lists.categories = sortNames(l.categories || []);
     lists.payees = l.payees || [];
@@ -515,7 +569,7 @@ $('btnPair').onclick = async () => {
     // already connected before: just check the (new) address with the existing key
     if (!oldTok) { settings.addr = oldAddr; $('pairMsg').textContent = 'Type the 6-digit code shown on the computer.'; return; }
     try {
-      await api('GET', '/api/lists');
+      await api('GET', '/api/lists', null, 15000, { noSearch: true });
       await saveSettings();
       $('pairMsg').textContent = `✓ Connected to ${addr}`; $('connSummary').textContent = `✓ Connected to ${addr}`;
       sync(true);
@@ -527,7 +581,7 @@ $('btnPair').onclick = async () => {
   }
   if (!/^\d{6}$/.test(code)) { settings.addr = oldAddr; $('pairMsg').textContent = 'The code is 6 digits.'; return; }
   try {
-    const r = await api('POST', '/api/pair', { code, device: 'iPhone' });
+    const r = await api('POST', '/api/pair', { code, device: 'iPhone' }, 15000, { noSearch: true });
     settings.token = r.token; await saveSettings();
     $('sCode').value = '';
     $('pairMsg').textContent = `✓ Connected to ${r.name || 'your computer'}`;
@@ -544,7 +598,7 @@ $('btnCleanBilled').onclick = async () => {
   if (!settings.token) { toast('Connect to your computer first (Computer connection below).'); return; }
   const btn = $('btnCleanBilled'); btn.disabled = true; const label = btn.textContent; btn.textContent = 'Asking your computer…';
   let billedIds;
-  try { billedIds = new Set(((await api('GET', '/api/lists')).billed) || []); }
+  try { billedIds = new Set(((await api('GET', '/api/lists', null, 15000, { manual: true })).billed) || []); }
   catch (e) { alert("Couldn't reach your computer, so nothing was removed.\n\nTry again when the phone is on home Wi-Fi and the program is open on the computer."); return; }
   finally { btn.disabled = false; btn.textContent = label; }
   const billed = (await DB.all()).filter(r => r.synced && billedIds.has(r.id));
