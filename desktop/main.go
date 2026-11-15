@@ -32,7 +32,7 @@ import (
 )
 
 const (
-	appVersion = "0.4.0"
+	appVersion = "0.4.1"
 	httpPort   = 8780 // dashboard + phone setup page
 	httpsPort  = 8443 // phone sync
 	phoneApp   = "https://killokreator.github.io/receipt-tracker/"
@@ -276,6 +276,14 @@ func phoneAPI() http.Handler {
 		store.mu.Lock()
 		d := map[string]any{"customers": nz(store.data.Customers), "categories": nz(store.data.Categories), "payees": store.data.Payees, "useNames": store.data.UseNames,
 			"company": store.data.Company.Name}
+		// receipts marked Billed on the computer, so the phone can hide them
+		billed := []string{}
+		for _, x := range store.data.Receipts {
+			if x.BilledAt != 0 {
+				billed = append(billed, x.ID)
+			}
+		}
+		d["billed"] = billed
 		if store.data.Payees == nil {
 			d["payees"] = []Payee{}
 		}
