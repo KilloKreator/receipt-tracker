@@ -2,12 +2,20 @@
 
 package main
 
-import "os/exec"
+import (
+	"os/exec"
+	"runtime"
+)
 
-// Start-with-Windows only exists on Windows; these let the program run elsewhere for testing.
-var fakeAutostart bool
+func hideWindow(cmd *exec.Cmd) {}
+func autostartEnabled() bool   { return false }
+func openStartupFolder()       {}
+func showError(msg string)     {}
 
-func hideWindow(cmd *exec.Cmd)   {}
-func autostartEnabled() bool     { return fakeAutostart }
-func setAutostart(on bool) error { fakeAutostart = on; return nil }
-func showError(msg string)       {}
+func shellOpen(target string) {
+	name := "xdg-open"
+	if runtime.GOOS == "darwin" {
+		name = "open"
+	}
+	exec.Command(name, target).Start()
+}

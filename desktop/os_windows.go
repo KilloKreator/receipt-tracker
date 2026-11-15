@@ -2,47 +2,53 @@
 
 package main
 
+// Windows helpers, using only the normal Windows functions every program uses
+// (no PowerShell, no registry tools, no firewall changes).
+
 import (
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"syscall"
 	"unsafe"
 )
 
-const runKey = `HKCU\Software\Microsoft\Windows\CurrentVersion\Run`
-const runName = "KellerKraft Receipts"
+var (
+	shell32      = syscall.NewLazyDLL("shell32.dll")
+	shellExecute = shell32.NewProc("ShellExecuteW")
+	user32       = syscall.NewLazyDLL("user32.dll")
+	messageBox   = user32.NewProc("MessageBoxW")
+)
 
-func hideWindow(cmd *exec.Cmd) {
-	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true, CreationFlags: 0x08000000} // CREATE_NO_WINDOW
+// Open a web address or folder the normal way (like double-clicking it)
+func shellOpen(target string) {
+	verb, _ := syscall.UTF16PtrFromString("open")
+	t, _ := syscall.UTF16PtrFromString(target)
+	shellExecute.Call(0, uintptr(unsafe.Pointer(verb)), uintptr(unsafe.Pointer(t)), 0, 0, 1)
 }
 
+func hideWindow(cmd *exec.Cmd) {}
+
+func startupFolder() string {
+	return filepath.Join(os.Getenv("APPDATA"), "Microsoft", "Windows", "Start Menu", "Programs", "Startup")
+}
+
+// "Start with Windows" = a shortcut to the program in the Startup folder (made by you)
 func autostartEnabled() bool {
-	cmd := exec.Command("reg", "query", runKey, "/v", runName)
-	hideWindow(cmd)
-	out, err := cmd.Output()
-	return err == nil && strings.Contains(string(out), runName)
+	entries, _ := os.ReadDir(startupFolder())
+	for _, e := range entries {
+		if strings.Contains(strings.ToLower(e.Name()), "kellerkraft") {
+			return true
+		}
+	}
+	return false
 }
 
-func setAutostart(on bool) error {
-	var cmd *exec.Cmd
-	if on {
-		exe, err := os.Executable()
-		if err != nil {
-			return err
-		}
-		cmd = exec.Command("reg", "add", runKey, "/v", runName, "/t", "REG_SZ", "/d", `"`+exe+`"`, "/f")
-	} else {
-		cmd = exec.Command("reg", "delete", runKey, "/v", runName, "/f")
-	}
-	hideWindow(cmd)
-	return cmd.Run()
-}
+func openStartupFolder() { shellOpen(startupFolder()) }
 
 func showError(msg string) {
-	user32 := syscall.NewLazyDLL("user32.dll")
-	box := user32.NewProc("MessageBoxW")
-	t, _ := syscall.UTF16PtrFromString("KellerKraft Receipts")
+	t, _ := syscall.UTF16PtrFromString("KellerKraft Time Saver")
 	m, _ := syscall.UTF16PtrFromString(msg)
-	box.Call(0, uintptr(unsafe.Pointer(m)), uintptr(unsafe.Pointer(t)), 0x10)
+	messageBox.Call(0, uintptr(unsafe.Pointer(m)), uintptr(unsafe.Pointer(t)), 0x10)
 }

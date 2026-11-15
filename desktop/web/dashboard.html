@@ -255,8 +255,10 @@ tr.picked td{background:var(--soft)}
       <div class="row"><button type="button" class="primary" id="bNetFix">🔧 Fix Windows network settings</button><button type="button" class="small" id="bNetRe">Check again</button></div>
       <p class="muted" style="margin:6px 0 0">The fix sets your home network to <b>Private</b> and lets KellerKraft Receipts through Windows Firewall. Windows will ask <i>"Do you want to allow this app to make changes?"</i>. Click <b>Yes</b>.</p>
     </div>
-    <details style="margin-top:10px"><summary class="muted">Phone still can't connect?</summary>
+    <details style="margin-top:10px" open><summary class="muted">Phone can't connect?</summary>
       <ul class="muted">
+        <li><b>Set your home Wi-Fi to Private:</b> click the Wi-Fi icon by the clock → <b>Properties</b> under your network → <b>Network profile: Private</b>.</li>
+        <li><b>Let the program through Windows Firewall:</b> Start → type <b>Allow an app through Windows Firewall</b> → <b>Change settings</b> → tick <b>Private</b> next to KellerKraft-Receipts. If it's not listed: <b>Allow another app… → Browse</b> → choose KellerKraft-Receipts.exe → <b>Add</b>.</li>
         <li>The iPhone must be on the <b>same Wi-Fi</b> as this computer, not a guest network.</li>
         <li>Try the other addresses for this computer listed above, if there are any.</li>
         <li>Some routers block devices from seeing each other ("AP isolation" / "client isolation"). If nothing works, check the router's settings.</li>
@@ -305,7 +307,13 @@ tr.picked td{background:var(--soft)}
 <!-- settings -->
 <dialog id="dSettings" class="narrow"><div class="dh"><h3>⚙ Settings</h3><button type="button" class="small" data-close>✕</button></div>
   <div class="db">
-    <p><label class="check"><input type="checkbox" id="cAuto"> <b>Start automatically with Windows</b></label><br><span class="muted">Recommended, so the phone can sync whenever you're home.</span></p>
+    <p><b>Start automatically with Windows</b> <span id="autoState" class="muted"></span><br>
+      <span class="muted">Recommended, so the phone can sync whenever you're home. To set it up:</span></p>
+    <ol class="muted" style="margin-top:0">
+      <li>Click <button type="button" class="small" id="bStartup">📂 Open the Startup folder</button></li>
+      <li>In another window, open the folder that has <b>KellerKraft-Receipts.exe</b> (<button type="button" class="small" id="bExeFolder">📂 Open it</button>).</li>
+      <li>Hold the <kbd>Alt</kbd> key and drag <b>KellerKraft-Receipts.exe</b> into the Startup folder. That makes a shortcut there.</li>
+    </ol>
     <p><b>Your receipts are saved in:</b><br><span class="muted" id="dirText"></span><br><button type="button" id="bFolder" style="margin-top:6px">📁 Open folder</button></p>
     <p class="muted">To back up, copy that whole folder (for example to a USB stick).</p>
     <p class="muted" id="verText"></p>
@@ -937,8 +945,12 @@ $('bSaveLists').onclick = async () => {
 };
 
 /* settings */
-$('bSettings').onclick = () => { $('cAuto').checked = !!S.autostart; $('dirText').textContent = S.dataDir; $('verText').textContent = 'Version ' + S.version; $('dSettings').showModal(); };
-$('cAuto').onchange = async () => { try { const r = await post('/local/autostart', { on: $('cAuto').checked }); $('cAuto').checked = r.on; toast(r.on ? 'Will start with Windows ✓' : 'Will not start with Windows'); } catch (e) { alert(e.message); } };
+$('bSettings').onclick = () => {
+  $('autoState').innerHTML = S.autostart ? '<span style="color:var(--good)">✓ set up</span>' : '(not set up yet)';
+  $('dirText').textContent = S.dataDir; $('verText').textContent = 'Version ' + S.version; $('dSettings').showModal();
+};
+$('bStartup').onclick = () => post('/local/startupfolder');
+$('bExeFolder').onclick = () => post('/local/exefolder');
 $('bFolder').onclick = () => post('/local/openfolder');
 $('bQuit').onclick = async () => {
   if (!confirm('Stop KellerKraft Receipts? The phone cannot sync until you start it again.')) return;

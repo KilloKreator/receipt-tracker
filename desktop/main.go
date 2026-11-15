@@ -20,10 +20,8 @@ import (
 	"net"
 	"net/http"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"regexp"
-	"runtime"
 	"sort"
 	"strconv"
 	"strings"
@@ -34,7 +32,7 @@ import (
 )
 
 const (
-	appVersion = "0.3.4"
+	appVersion = "0.3.5"
 	httpPort   = 8780 // dashboard + phone setup page
 	httpsPort  = 8443 // phone sync
 	phoneApp   = "https://killokreator.github.io/receipt-tracker/"
@@ -853,14 +851,15 @@ func localSite() http.Handler {
 		}
 		writeJSON(w, 200, map[string]bool{"ok": true})
 	}))
-	mux.HandleFunc("/local/autostart", local(func(w http.ResponseWriter, r *http.Request) {
-		var in struct{ On bool }
-		json.NewDecoder(io.LimitReader(r.Body, 4096)).Decode(&in)
-		if err := setAutostart(in.On); err != nil {
-			jsonErr(w, 500, err.Error())
-			return
+	mux.HandleFunc("/local/exefolder", local(func(w http.ResponseWriter, r *http.Request) {
+		if exe, err := os.Executable(); err == nil {
+			openFolder(filepath.Dir(exe))
 		}
-		writeJSON(w, 200, map[string]bool{"on": autostartEnabled()})
+		writeJSON(w, 200, map[string]bool{"ok": true})
+	}))
+	mux.HandleFunc("/local/startupfolder", local(func(w http.ResponseWriter, r *http.Request) {
+		openStartupFolder()
+		writeJSON(w, 200, map[string]bool{"ok": true})
 	}))
 	mux.HandleFunc("/local/netcheck", local(func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, 200, netCheck())
@@ -913,31 +912,6 @@ func localSite() http.Handler {
 
 /* ------------------------------------------------------------------ helpers */
 
-func openBrowser(url string) {
-	var cmd *exec.Cmd
-	switch runtime.GOOS {
-	case "windows":
-		cmd = exec.Command("rundll32", "url.dll,FileProtocolHandler", url)
-	case "darwin":
-		cmd = exec.Command("open", url)
-	default:
-		cmd = exec.Command("xdg-open", url)
-	}
-	hideWindow(cmd)
-	if err := cmd.Start(); err != nil {
-		log.Printf("could not open browser: %v", err)
-	}
-}
+func openBrowser(url string) { shellOpen(url) }
 
-func openFolder(dir string) {
-	var cmd *exec.Cmd
-	switch runtime.GOOS {
-	case "windows":
-		cmd = exec.Command("explorer", dir)
-	case "darwin":
-		cmd = exec.Command("open", dir)
-	default:
-		cmd = exec.Command("xdg-open", dir)
-	}
-	cmd.Start()
-}
+func openFolder(dir string) { shellOpen(dir) }

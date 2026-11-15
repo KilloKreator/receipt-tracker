@@ -1,6 +1,7 @@
-//go:build !windows
-
 package main
+
+// The program no longer changes Windows network or firewall settings itself
+// (that looks like malware to virus scanners). Phone setup explains the steps instead.
 
 type netStatus struct {
 	Supported bool `json:"supported"`
