@@ -122,3 +122,4 @@ details.week .item{margin:6px 0}
 .aclist li.new{color:var(--muted);font-size:15px}
 .results{font-size:14px;color:var(--muted);margin:10px 6px 0}
 #fPayee{scroll-margin-top:12px}
+.warnline{background:var(--warn-soft);color:var(--warn);border-radius:10px;padding:8px 10px;margin:4px 0 8px}

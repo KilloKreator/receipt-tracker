@@ -1,6 +1,6 @@
 /* KellerKraft Receipts — phone app */
 'use strict';
-const VERSION = '0.1.4';
+const VERSION = '0.1.5';
 const DEFAULT_CATEGORY = 'Uncategorized Expenses';
 const $ = id => document.getElementById(id);
 const norm = s => String(s == null ? '' : s).replace(/\s+/g, ' ').trim();
@@ -493,7 +493,8 @@ async function openSettings() {
   try {
     const est = await navigator.storage.estimate();
     const all = await DB.all();
-    $('storeInfo').textContent = `${all.length} receipts on this phone (about ${Math.round((est.usage || 0) / 1048576)} MB).`;
+    const waiting = all.filter(r => !r.synced).length;
+    $('storeInfo').textContent = `${all.length} receipts on this phone (about ${Math.round((est.usage || 0) / 1048576)} MB)` + (waiting ? `. ${waiting} not synced yet: they are only on this phone.` : '. All are also on your computer.');
   } catch (e) { $('storeInfo').textContent = ''; }
   $('version').textContent = 'KK Receipts ' + VERSION;
   show('settings');
