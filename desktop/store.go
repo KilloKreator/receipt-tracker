@@ -36,6 +36,8 @@ type Receipt struct {
 	// Set when the receipt has been put in a PDF (to avoid putting it in twice)
 	PdfAt   int64  `json:"pdfAt,omitempty"`
 	PdfName string `json:"pdfName,omitempty"`
+	// Position in the PDF chosen by hand (1, 2, 3…); 0 = date order
+	PdfOrder int `json:"pdfOrder,omitempty"`
 	// Set when the receipt has been billed to the customer (its amount no longer counts as "to bill")
 	BilledAt int64 `json:"billedAt,omitempty"`
 	// Receipts added on the computer: "computer"; the original file (e.g. a PDF) is kept

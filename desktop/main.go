@@ -32,7 +32,7 @@ import (
 )
 
 const (
-	appVersion = "0.4.6"
+	appVersion = "0.4.7"
 	httpPort   = 8780 // dashboard + phone setup page
 	httpsPort  = 8443 // phone sync
 	phoneApp   = "https://killokreator.github.io/receipt-tracker/"
@@ -424,7 +424,7 @@ func phoneAPI() http.Handler {
 			if !rec.HasImage {
 				rec.HasImage = old.HasImage
 			}
-			rec.PdfAt, rec.PdfName, rec.BilledAt = old.PdfAt, old.PdfName, old.BilledAt // the phone doesn't know about PDFs or billing
+			rec.PdfAt, rec.PdfName, rec.BilledAt, rec.PdfOrder = old.PdfAt, old.PdfName, old.BilledAt, old.PdfOrder // the phone doesn't know about PDFs or billing
 			*old = rec
 		} else {
 			store.data.Receipts = append(store.data.Receipts, &rec)
@@ -800,6 +800,30 @@ func localSite() http.Handler {
 		}
 		if rec.Category != "" {
 			store.data.Categories = cleanList(append(store.data.Categories, rec.Category))
+		}
+		if err := store.save(); err != nil {
+			jsonErr(w, 500, err.Error())
+			return
+		}
+		writeJSON(w, 200, map[string]bool{"ok": true})
+	}))
+	// PDF order numbers typed in a customer file: {"orders": {"<id>": 2, "<id>": 0}}  (0 = no number)
+	mux.HandleFunc("/local/pdforder", local(func(w http.ResponseWriter, r *http.Request) {
+		var in struct{ Orders map[string]int }
+		if json.NewDecoder(io.LimitReader(r.Body, 1<<20)).Decode(&in) != nil {
+			jsonErr(w, 400, "bad request")
+			return
+		}
+		store.mu.Lock()
+		defer store.mu.Unlock()
+		for id, n := range in.Orders {
+			if x := store.findReceipt(id); x != nil {
+				if n < 0 || n > 9999 {
+					n = 0
+				}
+				x.PdfOrder = n
+				x.Updated = time.Now().UnixMilli()
+			}
 		}
 		if err := store.save(); err != nil {
 			jsonErr(w, 500, err.Error())

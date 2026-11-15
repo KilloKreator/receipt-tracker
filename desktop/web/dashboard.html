@@ -51,6 +51,9 @@ tfoot td{font-weight:700;background:var(--bg)}
 .dupitem .txt{min-width:200px;max-width:320px}
 .dupside{display:flex;gap:10px;align-items:flex-start;flex:1;min-width:300px}
 .dupitem .acts{display:flex;gap:8px;flex-wrap:wrap}
+.ordcol{width:62px;text-align:center}
+.ordcell{text-align:center}
+.ordin{width:44px;text-align:center;padding:5px 4px;font-weight:600}
 .tag.dup{background:var(--warn-soft);color:var(--warn)}
 .btn.danger{background:var(--bad-soft);color:var(--bad);border-color:var(--bad-soft)}
 .tag{font-size:12px;padding:1px 8px;border-radius:999px;background:var(--soft);color:var(--accent);white-space:nowrap}
@@ -215,12 +218,14 @@ tr.picked td{background:var(--soft)}
     <label class="muted">Receipts per page <select id="perPage"><option value="1">1</option><option value="2" selected>2</option><option value="4">4</option><option value="6">6</option></select></label>
     <label class="check muted" title="When saving to a folder, also save a list of the receipts that opens in Excel"><input type="checkbox" id="cSummary" checked> Summary list (folder)</label>
     <button id="bAssign" title="Move the ticked receipts to a customer">👤 Assign customer…</button>
+    <button id="bNumber" title="Number the ticked receipts (or all shown) 1, 2, 3… in date order, then change any number to move it">🔢 Number by date</button>
+    <button id="bUnnumber" title="Remove the PDF numbers in this folder (back to date order)">Clear #</button>
     <button class="primary" id="bPDF">📄 Make PDF…</button>
     <button id="bSaveSel" title="Copy the scans (and a summary list) into a folder">💾 Save to folder…</button>
   </div>
   <div id="saveMsg"></div>
   <div class="table-wrap" style="margin-top:10px"><table>
-    <thead><tr><th style="width:40px"><input type="checkbox" id="cHead" aria-label="Select all"></th><th></th><th>Date</th><th>Payee</th><th id="colMid">Category</th><th>Note</th><th class="amt">Total</th><th class="billcol" title="Tick when this receipt has been billed to the customer">Billed</th></tr></thead>
+    <thead><tr><th style="width:40px"><input type="checkbox" id="cHead" aria-label="Select all"></th><th class="ordcol" title="Order in the PDF: type 1, 2, 3… Receipts without a number come after, by date.">PDF #</th><th></th><th>Date</th><th>Payee</th><th id="colMid">Category</th><th>Note</th><th class="amt">Total</th><th class="billcol" title="Tick when this receipt has been billed to the customer">Billed</th></tr></thead>
     <tbody id="rBody"></tbody></table></div>
 </section>
 <p class="muted" style="text-align:center" id="foot"></p>
@@ -394,6 +399,7 @@ async function refresh() {
   const s = JSON.stringify([S.receipts.map(r => r.id + r.updated + r.received + r.date + r.total + r.payee), S.notDup, S.customers, S.categories, S.payees, S.ips, S.pairCode]);
   status();
   if (s === sig) return;
+  if (document.activeElement && document.activeElement.classList.contains('ordin')) return;   // typing a PDF number: redraw later
   sig = s; render(); convRefresh();
 }
 function status() {
@@ -549,14 +555,30 @@ function renderCustomer() {
   const ids = new Set(S.receipts.map(r => r.id));
   [...selected].forEach(id => { if (!ids.has(id)) selected.delete(id); });
   const rs = filtered(), tb = $('rBody'); tb.innerHTML = '';
-  if (!rs.length) tb.append(el('tr', null, el('td', { colspan: 8, class: 'empty', text: all.length ? 'No receipts match.' : 'No receipts.' })));
+  if (!rs.length) tb.append(el('tr', null, el('td', { colspan: 9, class: 'empty', text: all.length ? 'No receipts match.' : 'No receipts.' })));
   rs.forEach(r => {
     const isNew = seenIds && !seenIds.has(r.id);
     const cb = el('input', { type: 'checkbox', 'aria-label': 'Select' }); cb.checked = selected.has(r.id);
     const bill = el('input', { type: 'checkbox', 'aria-label': 'Billed', title: r.billedAt ? `Billed ${new Date(r.billedAt).toLocaleDateString()}` : 'Tick when billed' });
     bill.checked = !!r.billedAt;
+    const ord = el('input', { type: 'text', inputmode: 'numeric', class: 'ordin', 'aria-label': 'PDF order', placeholder: '–', title: 'Order in the PDF (1 = first). Leave empty for date order.', maxlength: '4' });
+    ord.value = r.pdfOrder ? String(r.pdfOrder) : ''; ord._r = r;
+    ord.addEventListener('click', e => e.stopPropagation());
+    ord.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); const all = [...document.querySelectorAll('#rBody .ordin')]; const nx = all[all.indexOf(ord) + 1]; if (nx) nx.focus(); else ord.blur(); } });
+    ord.addEventListener('change', async () => {
+      const n = parseInt(ord.value, 10); const v = n > 0 ? Math.min(n, 9999) : 0;
+      // move it to that spot: the other numbered receipts in this folder shift, so no two share a number
+      const others = custRows().filter(x => x.id !== r.id && x.pdfOrder).sort(pdfSort);
+      if (v) others.splice(Math.min(v - 1, others.length), 0, r);
+      const orders = { [r.id]: 0 }; others.forEach((x, i) => { orders[x.id] = i + 1; });
+      try { await post('/local/pdforder', { orders }); for (const id in orders) { const x = S.receipts.find(y => y.id === id); if (x) x.pdfOrder = orders[id]; } }
+      catch (e) { alert(e.message); return; }
+      document.querySelectorAll('#rBody .ordin').forEach(i => { if (i !== document.activeElement && i._r) i.value = i._r.pdfOrder ? String(i._r.pdfOrder) : ''; });
+      ord.value = r.pdfOrder ? String(r.pdfOrder) : '';
+    });
     const tr = el('tr', { class: 'click' + (isNew ? ' newflash' : '') + (cb.checked ? ' picked' : '') + (r.billedAt ? ' billed' : '') },
       el('td', { class: 'chk' }, cb),
+      el('td', { class: 'ordcell' }, ord),
       el('td', { class: 'thumb' }, r.hasImage ? el('img', { src: `/img/${r.id}.jpg?v=${r.received}`, alt: '', loading: 'lazy' }) : ''),
       el('td', { text: fmtDate(r.date), style: 'white-space:nowrap' }),
       el('td', null, r.payee || r.memo || '',
@@ -574,6 +596,7 @@ function renderCustomer() {
     });
     cb.addEventListener('click', e => e.stopPropagation());
     cb.addEventListener('change', () => { if (cb.checked) selected.add(r.id); else selected.delete(r.id); tr.classList.toggle('picked', cb.checked); selSum(); });
+    tr.querySelector('td.ordcell').addEventListener('click', e => { e.stopPropagation(); if (e.target !== ord) ord.focus(); });
     tr.querySelector('td.chk').addEventListener('click', e => { if (e.target === cb) return; e.stopPropagation(); cb.click(); });
     tr.onclick = () => openRec(r);
     tb.append(tr);
@@ -654,9 +677,24 @@ $('bSaveSel').onclick = async () => {
   finally { rs.forEach(r => delete r._file); selSum(); }
 };
 /* PDF of the ticked receipts */
+const byDate = (a, b) => (a.date || '').localeCompare(b.date || '') || (a.created || 0) - (b.created || 0);
+const pdfSort = (a, b) => (a.pdfOrder || 1e9) - (b.pdfOrder || 1e9) || byDate(a, b);
+// Fill in PDF numbers 1, 2, 3… in date order (ticked receipts, or all shown if none are ticked)
+$('bNumber').onclick = async () => {
+  let rs = filtered().filter(r => selected.has(r.id)); if (!rs.length) rs = filtered();
+  rs = rs.slice().sort(byDate);
+  const orders = {}; rs.forEach((r, i) => { orders[r.id] = i + 1; });
+  await post('/local/pdforder', { orders }); sig = ''; await refresh();
+  toast(`Numbered ${plural(rs.length, 'receipt')} 1–${rs.length} by date. Change any number to move it.`);
+};
+$('bUnnumber').onclick = async () => {
+  const orders = {}; custRows().forEach(r => { if (r.pdfOrder) orders[r.id] = 0; });
+  if (!Object.keys(orders).length) { toast('No PDF numbers to clear.'); return; }
+  await post('/local/pdforder', { orders }); sig = ''; await refresh(); toast('PDF numbers cleared: date order.');
+};
 $('bPDF').onclick = async () => {
-  // always oldest first (date, then the order they were scanned)
-  const rs = S.receipts.filter(r => selected.has(r.id)).sort((a, b) => (a.date || '').localeCompare(b.date || '') || (a.created || 0) - (b.created || 0));
+  // numbered receipts first (PDF # 1, 2, 3…), then the rest oldest first (date, then the order they were scanned)
+  const rs = S.receipts.filter(r => selected.has(r.id)).sort(pdfSort);
   if (!rs.length) return;
   const done = rs.filter(r => r.pdfAt);
   if (done.length && !confirm(`${done.length} of the ${rs.length} selected receipt${rs.length === 1 ? ' is' : 's are'} already in a PDF:\n\n` +
@@ -676,7 +714,7 @@ $('bPDF').onclick = async () => {
       if (r.hasImage) image = new Uint8Array(await (await fetch(`/img/${r.id}.jpg`)).arrayBuffer());
       items.push({ date: r.date, payee: r.payee || r.memo, total: r.total, note: r.note, category: r.category, image });
     }
-    const dates = rs.map(r => r.date).filter(Boolean);
+    const dates = rs.map(r => r.date).filter(Boolean).sort();
     const range = dates.length ? (fmtDate(dates[0]) + (dates[dates.length - 1] !== dates[0] ? ' – ' + fmtDate(dates[dates.length - 1]) : '')) : '';
     const who = curCust === '(all)' ? 'All customers' : curCust === '(none)' ? 'Receipts with no customer' : curCust;
     const header = { company: ((S.company || {}).name) || '', logo: await logoForPDF(), subtitle: `${who}${curCust === '(none)' ? '' : ' receipts'}${range ? ' · ' + range : ''}` };
