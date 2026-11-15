@@ -54,6 +54,8 @@ tfoot td{font-weight:700;background:var(--bg)}
 .ordcol{width:62px;text-align:center}
 .ordcell{text-align:center}
 .ordin{width:44px;text-align:center;padding:5px 4px;font-weight:600}
+.nomatch.on{background:var(--warn-soft);color:var(--warn);border-color:var(--warn)}
+.tag.nm{background:var(--warn-soft);color:var(--warn);margin-left:6px;font-size:11px}
 .tag.dup{background:var(--warn-soft);color:var(--warn)}
 .btn.danger{background:var(--bad-soft);color:var(--bad);border-color:var(--bad-soft)}
 .tag{font-size:12px;padding:1px 8px;border-radius:999px;background:var(--soft);color:var(--accent);white-space:nowrap}
@@ -199,7 +201,8 @@ tr.picked td{background:var(--soft)}
 <section class="card hidden" id="viewCustomer">
   <div class="row" style="justify-content:space-between;margin-bottom:12px">
     <div class="row"><button id="bBack">‹ All customers</button><h2 style="margin:0 0 0 6px" id="custTitle"></h2>
-      <button id="bAdd" title="Add receipt pictures or PDFs to this folder (or drag files onto this page)">⬆ Add receipts…</button></div>
+      <button id="bAdd" title="Add receipt pictures or PDFs to this folder (or drag files onto this page)">⬆ Add receipts…</button>
+      <button id="bNoMatch" class="hidden"></button></div>
     <div class="big" id="custTotal" style="font-size:22px"></div>
   </div>
   <div class="row" style="margin-bottom:10px">
@@ -396,7 +399,7 @@ function el(tag, props, ...kids) {
 
 async function refresh() {
   try { S = await get(); } catch (e) { $('status').textContent = 'Program is not running'; $('status').className = 'pill warn'; return; }
-  const s = JSON.stringify([S.receipts.map(r => r.id + r.updated + r.received + r.date + r.total + r.payee), S.notDup, S.customers, S.categories, S.payees, S.ips, S.pairCode]);
+  const s = JSON.stringify([S.receipts.map(r => r.id + r.updated + r.received + r.date + r.total + r.payee), S.notDup, S.noMatch, S.customers, S.categories, S.payees, S.ips, S.pairCode]);
   status();
   if (s === sig) return;
   if (document.activeElement && document.activeElement.classList.contains('ordin')) return;   // typing a PDF number: redraw later
@@ -473,6 +476,13 @@ function renderDupWarn() {
   }
   if (fresh) { box.scrollIntoView({ behavior: 'smooth', block: 'start' }); toast('⚠ A possible duplicate receipt came in. See the top of Receipts.'); }
 }
+const isNoMatch = name => (S.noMatch || []).some(c => lc(c) === lc(name));
+$('bNoMatch').onclick = async () => {
+  const off = !isNoMatch(curCust);
+  if (off && !confirm(`Leave "${curCust}" out of the IIF converter's customer match?\n\nIts receipts will no longer fill in the customer on bank lines. The receipts themselves are not changed.`)) return;
+  await post('/local/nomatch', { customer: curCust, skip: off }); sig = ''; await refresh();
+  toast(off ? `${curCust} is left out of the IIF customer match.` : `${curCust} is used in the IIF customer match again.`);
+};
 const sumOf = rs => rs.reduce((s, r) => s + (r.total || 0), 0);
 const toBill = rs => rs.filter(r => !r.billedAt);
 // latest activity on any of these receipts: added, edited, billed or put in a PDF
@@ -518,7 +528,7 @@ function renderFolders() {
     // highest amount still to bill first; equal amounts (e.g. all $0) by most recent activity
     const list = names.filter(n => !q || lc(n).includes(q)).sort((a, b) =>
       (billSum(m.get(b)) - billSum(m.get(a))) || (lastAct(m.get(b)) - lastAct(m.get(a))) || a.localeCompare(b, undefined, { sensitivity: 'base' }));
-    list.forEach(n => card(g, n, '📁', n, m.get(n)));
+    list.forEach(n => card(g, n, '📁', n, m.get(n), '', isNoMatch(n) ? el('span', { class: 'tag nm', text: '🚫 IIF', title: 'Left out of the IIF converter\'s customer match' }) : null));
     if (!list.length) g.append(el('div', { class: 'empty', text: q ? 'No customer files match.' : 'No customer files yet.' }));
   }
   $('grand').textContent = `${money(billSum(S.receipts))} to bill (of ${money(sumOf(S.receipts))})`;
@@ -552,6 +562,16 @@ function renderCustomer() {
   $('custTotal').append(...[el('span', { text: money(billSum(all)) }), el('span', { class: 'tobill', text: ' to bill' }),
     billSum(all) !== sumOf(all) ? el('div', { class: 'billsub', text: `${money(sumOf(all) - billSum(all))} billed · ${money(sumOf(all))} total` }) : null].filter(Boolean));
   $('colMid').textContent = curCust === '(all)' ? 'Customer' : 'Category';
+  const realCust = curCust !== '(all)' && curCust !== '(none)';
+  $('bAssign').classList.toggle('hidden', realCust);              // inside a customer's file there's nothing to assign
+  $('bNoMatch').classList.toggle('hidden', !realCust);
+  if (realCust) {
+    const off = isNoMatch(curCust);
+    $('bNoMatch').textContent = off ? '🚫 Left out of IIF customer match' : 'IIF customer match: on';
+    $('bNoMatch').className = off ? 'nomatch on' : 'nomatch';
+    $('bNoMatch').title = off ? 'Receipts in this file are NOT used to fill in the customer in the IIF converter. Click to use them again.'
+      : 'Receipts in this file fill in the customer in the IIF converter. Click to leave this whole file out.';
+  }
   const ids = new Set(S.receipts.map(r => r.id));
   [...selected].forEach(id => { if (!ids.has(id)) selected.delete(id); });
   const rs = filtered(), tb = $('rBody'); tb.innerHTML = '';

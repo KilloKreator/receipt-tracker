@@ -32,7 +32,7 @@ import (
 )
 
 const (
-	appVersion = "0.4.7"
+	appVersion = "0.4.8"
 	httpPort   = 8780 // dashboard + phone setup page
 	httpsPort  = 8443 // phone sync
 	phoneApp   = "https://killokreator.github.io/receipt-tracker/"
@@ -585,7 +585,14 @@ func localSite() http.Handler {
 		}
 		store.mu.Lock()
 		rs := []lite{}
+		skip := map[string]bool{}
+		for _, c := range store.data.NoMatch {
+			skip[strings.ToLower(strings.TrimSpace(c))] = true
+		}
 		for _, x := range store.data.Receipts {
+			if skip[strings.ToLower(strings.TrimSpace(x.Customer))] {
+				continue // this customer file is left out of the customer match
+			}
 			rs = append(rs, lite{x.ID, x.Date, x.Total, x.Payee, x.Customer, x.Note})
 		}
 		var settings any = nil
@@ -765,7 +772,7 @@ func localSite() http.Handler {
 			"pairCode": code, "pairExpires": exp.UnixMilli(), "phoneApp": phoneApp, "devices": len(store.data.Devices),
 			"company":  store.data.Company,
 			"receipts": rs, "customers": nz(store.data.Customers), "categories": nz(store.data.Categories),
-			"payees": store.data.Payees, "useNames": store.data.UseNames, "notDup": nz(store.data.NotDup),
+			"payees": store.data.Payees, "useNames": store.data.UseNames, "notDup": nz(store.data.NotDup), "noMatch": nz(store.data.NoMatch),
 			"lastSync": func() int64 {
 				if ls.IsZero() {
 					return 0
@@ -825,6 +832,35 @@ func localSite() http.Handler {
 				x.Updated = time.Now().UnixMilli()
 			}
 		}
+		if err := store.save(); err != nil {
+			jsonErr(w, 500, err.Error())
+			return
+		}
+		writeJSON(w, 200, map[string]bool{"ok": true})
+	}))
+	// Leave a customer file out of (or put it back in) the IIF converter's customer match
+	mux.HandleFunc("/local/nomatch", local(func(w http.ResponseWriter, r *http.Request) {
+		var in struct {
+			Customer string
+			Skip     bool
+		}
+		if json.NewDecoder(io.LimitReader(r.Body, 4096)).Decode(&in) != nil || strings.TrimSpace(in.Customer) == "" {
+			jsonErr(w, 400, "bad request")
+			return
+		}
+		name := strings.TrimSpace(in.Customer)
+		store.mu.Lock()
+		defer store.mu.Unlock()
+		out := []string{}
+		for _, c := range store.data.NoMatch {
+			if !strings.EqualFold(c, name) {
+				out = append(out, c)
+			}
+		}
+		if in.Skip {
+			out = append(out, name)
+		}
+		store.data.NoMatch = out
 		if err := store.save(); err != nil {
 			jsonErr(w, 500, err.Error())
 			return

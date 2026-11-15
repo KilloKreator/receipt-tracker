@@ -69,6 +69,8 @@ type Data struct {
 	Converter json.RawMessage `json:"converter,omitempty"`
 	// Pairs of receipts the user said are NOT duplicates ("idA|idB", sorted), so they aren't flagged again
 	NotDup []string `json:"notDup,omitempty"`
+	// Customer files left out of the IIF converter's customer match
+	NoMatch []string `json:"noMatch,omitempty"`
 }
 
 type Store struct {
