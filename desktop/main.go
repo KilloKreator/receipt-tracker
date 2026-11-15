@@ -34,7 +34,7 @@ import (
 )
 
 const (
-	appVersion = "0.3.3"
+	appVersion = "0.3.4"
 	httpPort   = 8780 // dashboard + phone setup page
 	httpsPort  = 8443 // phone sync
 	phoneApp   = "https://killokreator.github.io/receipt-tracker/"
@@ -134,6 +134,24 @@ func main() {
 	}()
 	srv := &http.Server{Handler: localSite(), ReadHeaderTimeout: 20 * time.Second}
 	log.Fatal(srv.Serve(ln))
+}
+
+// Folder with the receipt-reading engine: "ocr" next to the program (or in the data folder)
+func ocrDir() string {
+	var dirs []string
+	if exe, err := os.Executable(); err == nil {
+		dirs = append(dirs, filepath.Join(filepath.Dir(exe), "ocr"))
+	}
+	dirs = append(dirs, filepath.Join(dataDir, "ocr"))
+	if d := os.Getenv("KK_OCR_DIR"); d != "" {
+		dirs = append([]string{d}, dirs...)
+	}
+	for _, d := range dirs {
+		if st, err := os.Stat(filepath.Join(d, "tesseract.min.js")); err == nil && !st.IsDir() {
+			return d
+		}
+	}
+	return ""
 }
 
 // Version of the copy that is already running ("" if it can't be asked)
@@ -472,6 +490,27 @@ func localSite() http.Handler {
 		writeJSON(w, 200, resp)
 	}))
 	// scripts used by the dashboard (PDF reader etc.), built into this program
+	// The receipt-reading engine is NOT built into this program (a large built-in engine makes
+	// virus scanners suspicious). It ships as an "ocr" folder next to KellerKraft-Receipts.exe.
+	mux.HandleFunc("/assets/vendor/tesseract/", local(func(w http.ResponseWriter, r *http.Request) {
+		name := strings.TrimPrefix(r.URL.Path, "/assets/vendor/tesseract/")
+		if strings.Contains(name, "..") || name == "" {
+			http.NotFound(w, r)
+			return
+		}
+		dir := ocrDir()
+		if dir == "" {
+			http.NotFound(w, r)
+			return
+		}
+		if strings.HasSuffix(name, ".js") {
+			w.Header().Set("Content-Type", "text/javascript; charset=utf-8")
+		}
+		http.ServeFile(w, r, filepath.Join(dir, filepath.FromSlash(name)))
+	}))
+	mux.HandleFunc("/local/ocr", local(func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, 200, map[string]any{"installed": ocrDir() != ""})
+	}))
 	mux.HandleFunc("/assets/", local(func(w http.ResponseWriter, r *http.Request) {
 		name := strings.TrimPrefix(r.URL.Path, "/assets/")
 		if strings.Contains(name, "..") {

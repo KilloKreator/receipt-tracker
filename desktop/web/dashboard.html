@@ -674,15 +674,15 @@ async function fileToReceipt(file) {
   return { file, isPdf, jpeg, thumb: t.toDataURL('image/jpeg', 0.8), got, text };
 }
 /* the same receipt reader the phone uses (Tesseract), built into this program */
-let ocrP = null;
+let ocrP = null, ocrMissing = false;
 function ocrWorker() {
   if (!ocrP) {
-    ocrP = new Promise((res, rej) => {
+    ocrP = fetch('/local/ocr', { cache: 'no-store' }).then(r => r.json()).then(o => { if (!o.installed) throw new Error('no ocr folder'); }).then(() => new Promise((res, rej) => {
       const s = document.createElement('script'); s.src = '/assets/vendor/tesseract/tesseract.min.js';
       s.onload = () => Tesseract.createWorker('eng', 1, { workerPath: '/assets/vendor/tesseract/worker.min.js', corePath: '/assets/vendor/tesseract/core',
         langPath: '/assets/vendor/tesseract/lang', gzip: true, workerBlobURL: false, cacheMethod: 'none' }).then(res, rej);
       s.onerror = rej; document.head.append(s);
-    }).catch(e => { ocrP = null; throw e; });
+    })).catch(e => { ocrP = null; ocrMissing = String(e.message).includes('no ocr'); throw e; });
   }
   return ocrP;
 }
@@ -711,7 +711,8 @@ function fillCard(card) {
   card.classList.remove('busy');
   card.querySelector('img').src = r.thumb;
   const found = ['date', 'total', 'payee'].filter(k => g[k] != null && g[k] !== '');
-  card.querySelector('.ast').textContent = found.length ? `✓ Read the ${found.join(', ')}. Please check.` : "Couldn't read this receipt clearly. Please fill it in.";
+  card.querySelector('.ast').textContent = found.length ? `✓ Read the ${found.join(', ')}. Please check.`
+    : (!r.isPdf && ocrMissing ? 'Picture reading isn\'t installed (the "ocr" folder must be next to KellerKraft-Receipts.exe). Please fill it in.' : "Couldn't read this receipt clearly. Please fill it in.");
   const inp = (label, type, value, list, cls) => {
     const i = el('input', { type, autocomplete: 'off' }); i.value = value == null ? '' : value; if (list) i.setAttribute('list', list);
     const l = el('label', cls ? { class: cls } : null, label, i); return [l, i];

@@ -26,4 +26,8 @@ GOOS=windows GOARCH=amd64 go build -trimpath -ldflags "-H windowsgui" -o KellerK
 ```
 
 Receipt reading uses [Tesseract.js](https://github.com/naptha/tesseract.js) (Apache 2.0),
-included in `docs/vendor/tesseract` so it works without internet.
+included in `docs/vendor/tesseract` (phone) and `desktop/ocr` (shipped as an `ocr` folder next to the
+Windows program, not built into it) so it works without internet.
+
+Downloads: `download/KellerKraft-TimeSaver.zip` (program + ocr folder) and
+`download/KellerKraft-Receipts-program-only.zip` (program only; pictures aren't read automatically).
