@@ -5,6 +5,7 @@ package main
 
 import (
 	"encoding/json"
+	"math"
 	"os"
 	"path/filepath"
 	"sort"
@@ -41,6 +42,39 @@ type Receipt struct {
 	// Receipts added on the computer: "computer"; the original file (e.g. a PDF) is kept
 	Source   string `json:"source,omitempty"`
 	Original string `json:"original,omitempty"`
+	// Set when this receipt arrived looking like one that was already billed (same total, date within 2 days)
+	DupOf string `json:"dupOf,omitempty"`
+}
+
+// billedTwin finds an already billed receipt that rec looks like (same total, dates no more than 2 days apart).
+// Call with s.mu held.
+func (s *Store) billedTwin(rec *Receipt) string {
+	if rec.Total == nil || *rec.Total <= 0 {
+		return ""
+	}
+	day := func(d string) (int64, bool) {
+		t, err := time.Parse("2006-01-02", d)
+		return t.Unix() / 86400, err == nil
+	}
+	rd, rok := day(rec.Date)
+	best, bestGap := "", int64(99)
+	for _, x := range s.data.Receipts {
+		if x.ID == rec.ID || x.BilledAt == 0 || x.Total == nil || math.Abs(*x.Total-*rec.Total) > 0.005 {
+			continue
+		}
+		xd, xok := day(x.Date)
+		if !rok || !xok {
+			continue
+		}
+		gap := xd - rd
+		if gap < 0 {
+			gap = -gap
+		}
+		if gap <= 2 && gap < bestGap {
+			best, bestGap = x.ID, gap
+		}
+	}
+	return best
 }
 
 type Company struct {

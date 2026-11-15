@@ -118,6 +118,17 @@
 
   <!-- VIEWER -->
   <div id="viewer" class="viewer hidden"><img id="viewerImg" alt="Receipt"><button class="icon close" id="viewerClose">✕</button></div>
+  <!-- RESCAN? -->
+  <div id="dup" class="dup hidden" role="dialog" aria-modal="true" aria-labelledby="dupTitle">
+    <div class="dupBox">
+      <h2 id="dupTitle">Is this a rescan?</h2>
+      <p class="small" id="dupText"></p>
+      <div class="dupCard dupNewCard"><img id="dupNewImg" alt="New scan"><div><b>New scan</b><div class="small muted" id="dupNewInfo"></div></div></div>
+      <div id="dupList"></div>
+      <button class="secondary wide" id="dupNot">Not a rescan: save as a new receipt</button>
+      <button class="link wide center" id="dupBack">Go back to the receipt</button>
+    </div>
+  </div>
   <div id="busy" class="busy hidden"><div class="spinner"></div><div id="busyText">Working…</div></div>
   <div id="toast" class="toast hidden"></div>
 </div>

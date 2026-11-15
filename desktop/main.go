@@ -32,7 +32,7 @@ import (
 )
 
 const (
-	appVersion = "0.4.1"
+	appVersion = "0.4.2"
 	httpPort   = 8780 // dashboard + phone setup page
 	httpsPort  = 8443 // phone sync
 	phoneApp   = "https://killokreator.github.io/receipt-tracker/"
@@ -284,6 +284,16 @@ func phoneAPI() http.Handler {
 			}
 		}
 		d["billed"] = billed
+		// recent receipts on the computer, so the phone can spot a rescan of one it no longer has
+		cutoff := time.Now().AddDate(0, 0, -180).Format("2006-01-02")
+		known := []map[string]any{}
+		for _, x := range store.data.Receipts {
+			if x.Total != nil && x.Date >= cutoff {
+				known = append(known, map[string]any{"id": x.ID, "date": x.Date, "total": *x.Total, "payee": x.Payee, "customer": x.Customer,
+					"category": x.Category, "note": x.Note, "hasImage": x.HasImage, "billed": x.BilledAt != 0})
+			}
+		}
+		d["known"] = known
 		if store.data.Payees == nil {
 			d["payees"] = []Payee{}
 		}
@@ -305,6 +315,74 @@ func phoneAPI() http.Handler {
 			jsonErr(w, 500, err.Error())
 			return
 		}
+		writeJSON(w, 200, map[string]bool{"ok": true})
+	}))
+	// The phone's picture of a receipt, to compare with a rescan
+	mux.HandleFunc("/api/image", authed(func(w http.ResponseWriter, r *http.Request) {
+		id := r.URL.Query().Get("id")
+		if !idRe.MatchString(id) {
+			http.NotFound(w, r)
+			return
+		}
+		w.Header().Set("Cache-Control", "no-store")
+		http.ServeFile(w, r, store.imagePath(id))
+	}))
+	// A better scan of a receipt the computer already has: replace only the picture,
+	// everything else (customer, billed, PDF, changes made on the computer) stays as it is
+	mux.HandleFunc("/api/receipts/image", authed(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			jsonErr(w, 405, "POST only")
+			return
+		}
+		r.Body = http.MaxBytesReader(w, r.Body, 30<<20)
+		if err := r.ParseMultipartForm(32 << 20); err != nil {
+			jsonErr(w, 400, "bad upload")
+			return
+		}
+		id := r.FormValue("id")
+		if !idRe.MatchString(id) {
+			jsonErr(w, 400, "bad receipt")
+			return
+		}
+		store.mu.Lock()
+		found := store.findReceipt(id) != nil
+		store.mu.Unlock()
+		if !found {
+			jsonErr(w, 404, "not found")
+			return
+		}
+		f, _, err := r.FormFile("image")
+		if err != nil {
+			jsonErr(w, 400, "no image")
+			return
+		}
+		defer f.Close()
+		tmp := store.imagePath(id) + ".tmp"
+		out, err := os.Create(tmp)
+		if err == nil {
+			_, err = io.Copy(out, f)
+			out.Close()
+		}
+		if err == nil {
+			err = os.Rename(tmp, store.imagePath(id))
+		}
+		if err != nil {
+			jsonErr(w, 500, "could not save image: "+err.Error())
+			return
+		}
+		store.mu.Lock()
+		if old := store.findReceipt(id); old != nil {
+			old.HasImage = true
+			old.Received = time.Now().UnixMilli()
+			old.Updated = old.Received
+		}
+		err = store.save()
+		store.mu.Unlock()
+		if err != nil {
+			jsonErr(w, 500, err.Error())
+			return
+		}
+		log.Printf("new picture for receipt %s", id)
 		writeJSON(w, 200, map[string]bool{"ok": true})
 	}))
 	mux.HandleFunc("/api/receipts", authed(func(w http.ResponseWriter, r *http.Request) {
@@ -346,9 +424,10 @@ func phoneAPI() http.Handler {
 			if !rec.HasImage {
 				rec.HasImage = old.HasImage
 			}
-			rec.PdfAt, rec.PdfName, rec.BilledAt = old.PdfAt, old.PdfName, old.BilledAt // the phone doesn't know about PDFs or billing
+			rec.PdfAt, rec.PdfName, rec.BilledAt, rec.DupOf = old.PdfAt, old.PdfName, old.BilledAt, old.DupOf // the phone doesn't know about PDFs or billing
 			*old = rec
 		} else {
+			rec.DupOf = store.billedTwin(&rec)
 			store.data.Receipts = append(store.data.Receipts, &rec)
 		}
 		if rec.Customer != "" {
@@ -625,6 +704,7 @@ func localSite() http.Handler {
 			}
 		}
 		store.mu.Lock()
+		rec.DupOf = store.billedTwin(&rec)
 		store.data.Receipts = append(store.data.Receipts, &rec)
 		if rec.Customer != "" {
 			store.data.Customers = cleanList(append(store.data.Customers, rec.Customer))
@@ -811,6 +891,25 @@ func localSite() http.Handler {
 		}
 		if cust != "" {
 			store.data.Customers = cleanList(append(store.data.Customers, cust))
+		}
+		if err := store.save(); err != nil {
+			jsonErr(w, 500, err.Error())
+			return
+		}
+		writeJSON(w, 200, map[string]bool{"ok": true})
+	}))
+	// "Not a duplicate": stop warning about this receipt
+	mux.HandleFunc("/local/dupok", local(func(w http.ResponseWriter, r *http.Request) {
+		var in struct{ ID string }
+		if json.NewDecoder(io.LimitReader(r.Body, 4096)).Decode(&in) != nil || !idRe.MatchString(in.ID) {
+			jsonErr(w, 400, "bad request")
+			return
+		}
+		store.mu.Lock()
+		defer store.mu.Unlock()
+		if x := store.findReceipt(in.ID); x != nil {
+			x.DupOf = ""
+			x.Updated = time.Now().UnixMilli()
 		}
 		if err := store.save(); err != nil {
 			jsonErr(w, 500, err.Error())

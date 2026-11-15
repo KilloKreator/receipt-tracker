@@ -43,6 +43,15 @@ tfoot td{font-weight:700;background:var(--bg)}
 @media (max-width:900px){.owed{grid-template-columns:1fr}}
 .big{font-size:28px;font-weight:700;font-variant-numeric:tabular-nums}
 .empty{padding:28px;text-align:center;color:var(--muted)}
+.dupwarn{border:2px solid var(--warn);background:var(--warn-soft)}
+.dupwarn h2{margin:0 0 6px;color:var(--warn);font-size:18px}
+.dupitem{display:flex;gap:14px;align-items:center;flex-wrap:wrap;background:var(--card);border-radius:8px;padding:10px;margin-top:10px}
+.dupitem figure{margin:0;text-align:center;font-size:12px;color:var(--muted)}
+.dupitem figure img{width:90px;height:120px;object-fit:contain;background:#fff;border:1px solid var(--line);border-radius:4px;cursor:zoom-in;display:block}
+.dupitem .txt{flex:1;min-width:260px}
+.dupitem .acts{display:flex;gap:8px;flex-wrap:wrap}
+.tag.dup{background:var(--warn-soft);color:var(--warn)}
+.btn.danger{background:var(--bad-soft);color:var(--bad);border-color:var(--bad-soft)}
 .tag{font-size:12px;padding:1px 8px;border-radius:999px;background:var(--soft);color:var(--accent);white-space:nowrap}
 .tag.pdf{background:var(--good-soft);color:var(--good);display:inline-block;margin-top:3px}
 .tag.none{background:var(--warn-soft);color:var(--warn)}
@@ -168,6 +177,7 @@ tr.picked td{background:var(--soft)}
 </nav>
 
 <div id="tabReceipts">
+<section class="card dupwarn hidden" id="dupWarn" role="alert"></section>
 <section class="card" id="viewFolders">
   <h2>🧾 Receipts <span class="muted">Click a folder to open it.</span>
     <button id="bAddTop" title="Add receipt pictures or PDFs from this computer" style="margin-left:auto">⬆ Add receipts…</button></h2>
@@ -400,6 +410,37 @@ function render() {
   if (curCust !== null) renderCustomer();
   $('foot').textContent = `Time Saver ${S.version} · Saved in ${S.dataDir}`;
   renderBrand();
+  renderDupWarn();
+}
+/* Receipts that came in looking like one that was already billed */
+let dupSeen = null;
+function renderDupWarn() {
+  const box = $('dupWarn'), byId = new Map(S.receipts.map(r => [r.id, r]));
+  const dups = S.receipts.filter(r => r.dupOf && byId.has(r.dupOf));
+  box.innerHTML = ''; box.classList.toggle('hidden', !dups.length);
+  const rt = document.querySelector('.mtab[data-mtab="receipts"]'); rt.textContent = (dups.length ? '⚠ ' : '') + '🧾 Receipts';
+  document.title = (dups.length ? '⚠ ' : '') + document.title.replace(/^⚠ /, '');
+  if (!dups.length) { dupSeen = new Set(); return; }
+  const fresh = dupSeen && dups.some(r => !dupSeen.has(r.id));
+  dupSeen = new Set(dups.map(r => r.id));
+  box.append(el('h2', { text: `⚠ ${dups.length === 1 ? 'A receipt' : dups.length + ' receipts'} may already be billed` }),
+    el('div', { class: 'muted', text: (dups.length === 1 ? 'This just came in, but it looks like a receipt' : 'These just came in, but they look like receipts') + ' you already billed (same total, date within 2 days). Check that you don\'t bill the same receipt twice.' }));
+  const desc = r => `${fmtDate(r.date) || 'No date'} · ${money(r.total)}${r.payee ? ' · ' + r.payee : ''}`;
+  const pic = (r, label) => el('figure', null, r.hasImage ? el('img', { src: `/img/${r.id}.jpg?v=${r.received}`, alt: label, title: 'Click to see it bigger', onclick: () => window.open(`/img/${r.id}.jpg?v=${r.received}`, '_blank') }) : el('div', { class: 'empty', text: 'No picture' }), label);
+  for (const r of dups) {
+    const o = byId.get(r.dupOf);
+    box.append(el('div', { class: 'dupitem' },
+      pic(r, 'New'), pic(o, 'Already billed'),
+      el('div', { class: 'txt' },
+        el('div', null, el('b', { text: 'New: ' }), desc(r), r.customer ? ` · ${r.customer}` : el('span', { class: 'muted', text: ' · no customer yet' })),
+        el('div', null, el('b', { text: 'Already billed: ' }), desc(o), o.customer ? ` · ${o.customer}` : '', ` · billed ${new Date(o.billedAt).toLocaleDateString()}`),
+        el('div', { class: 'acts', style: 'margin-top:8px' },
+          el('button', { class: 'btn', text: 'Not the same receipt', title: 'Keep it and stop warning', onclick: async () => { await post('/local/dupok', { id: r.id }); toast('OK, kept it.'); refresh(); } }),
+          el('button', { class: 'btn danger', text: 'Same receipt: delete the new one', onclick: async () => {
+            if (!confirm(`Delete the new copy (${desc(r)})? The billed one stays.`)) return;
+            await post('/local/delete', { id: r.id }); toast('Deleted the new copy.'); refresh(); } })))));
+  }
+  if (fresh) { box.scrollIntoView({ behavior: 'smooth', block: 'start' }); toast('⚠ A receipt that may already be billed just came in. See the top of Receipts.'); }
 }
 const sumOf = rs => rs.reduce((s, r) => s + (r.total || 0), 0);
 const toBill = rs => rs.filter(r => !r.billedAt);
@@ -495,6 +536,7 @@ function renderCustomer() {
       el('td', { text: fmtDate(r.date), style: 'white-space:nowrap' }),
       el('td', null, r.payee || r.memo || '',
         r.original === 'pdf' ? el('span', { class: 'tag pc', text: 'PDF', title: 'Added on this computer from a PDF' }) : null,
+        r.dupOf ? el('div', null, el('span', { class: 'tag dup', text: '⚠ May already be billed', title: 'Looks like a receipt that was already billed. See the box at the top.' })) : null,
         r.pdfAt ? el('div', null, el('span', { class: 'tag pdf', text: '📄 In PDF ' + new Date(r.pdfAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }), title: `Put in a PDF on ${new Date(r.pdfAt).toLocaleString()}${r.pdfName ? ': ' + r.pdfName : ''}` })) : null),
       curCust === '(all)' ? el('td', null, r.customer || el('span', { class: 'tag none', text: 'No customer' })) : el('td', { text: r.category || '' }),
       el('td', { class: 'muted', text: r.note || '' }), el('td', { class: 'amt', text: money(r.total) }),

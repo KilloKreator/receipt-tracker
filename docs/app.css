@@ -123,3 +123,16 @@ details.week .item{margin:6px 0}
 .results{font-size:14px;color:var(--muted);margin:10px 6px 0}
 #fPayee{scroll-margin-top:12px}
 .warnline{background:var(--warn-soft);color:var(--warn);border-radius:10px;padding:8px 10px;margin:4px 0 8px}
+
+/* rescan question */
+.dup{position:fixed;inset:0;z-index:40;background:rgba(0,0,0,.55);display:flex;align-items:flex-end;justify-content:center}
+.dup.hidden{display:none}
+.dupBox{background:var(--bg);width:100%;max-width:560px;max-height:92vh;overflow:auto;border-radius:18px 18px 0 0;padding:16px 16px calc(var(--safe-bot) + 16px);box-sizing:border-box}
+.dupBox h2{margin:0 0 4px;font-size:21px}
+.dupCard{background:var(--card);border-radius:14px;padding:10px;margin:10px 0;display:flex;gap:12px;align-items:flex-start}
+.dupCard img,.dupCard .noimg{width:84px;height:112px;object-fit:contain;background:#fff;border-radius:6px;border:1px solid var(--line);flex:none}
+.dupCard .noimg{display:grid;place-items:center;font-size:12px;color:#6b7580;text-align:center;padding:4px;box-sizing:border-box}
+.dupCard .grow{flex:1;min-width:0}
+.dupCard .btns{display:flex;flex-direction:column;gap:6px;margin-top:8px}
+.dupCard .btns button{padding:10px;font-size:15px}
+.dupNewCard{border:2px solid var(--accent)}

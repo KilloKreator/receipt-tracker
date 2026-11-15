@@ -1,6 +1,6 @@
 /* Time Saver — phone app */
 'use strict';
-const VERSION = '0.2.0';
+const VERSION = '0.2.1';
 const DEFAULT_CATEGORY = 'Uncategorized Expenses';
 const $ = id => document.getElementById(id);
 const norm = s => String(s == null ? '' : s).replace(/\s+/g, ' ').trim();
@@ -405,12 +405,109 @@ $('editSave').onclick = async () => {
     updated: Date.now(), synced: false,
   });
   if (!current.memoManual) current.memo = current.payee;
+  if (isNew) {
+    const matches = await findRescans(current);
+    if (matches.length) {
+      const ans = await askRescan(current, matches);
+      if (ans.action === 'back') return;
+      if (ans.action !== 'separate') { await useRescan(current, ans); return; }
+    }
+  }
   await DB.put(current);
   current = null; dirty = false;
   show('home'); await renderHome();
   toast('Saved ✓');
   sync(false);
 };
+/* ---------- rescans: the same receipt scanned twice ---------- */
+const dayNo = d => d ? Math.round(new Date(d + 'T12:00').getTime() / 864e5) : NaN;
+const fmtD = d => d ? new Date(d + 'T12:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'No date';
+const fmtMoney = n => n == null ? 'no total' : '$' + Number(n).toFixed(2);
+// Same total, and dates no more than 2 days apart (in case a date was read wrong)
+async function findRescans(rec) {
+  if (rec.total == null || !(rec.total > 0)) return [];
+  const same = x => x.total != null && Math.abs(Number(x.total) - rec.total) < 0.005 && Math.abs(dayNo(x.date) - dayNo(rec.date)) <= 2;
+  const onPhone = (await DB.all()).filter(r => r.id !== rec.id);
+  const phoneIds = new Set(onPhone.map(r => r.id));
+  const out = onPhone.filter(same).map(r => ({ where: 'phone', rec: r }))
+    .concat((lists.known || []).filter(k => !phoneIds.has(k.id) && same(k)).map(k => ({ where: 'computer', rec: k })));
+  out.sort((a, b) => Math.abs(dayNo(a.rec.date) - dayNo(rec.date)) - Math.abs(dayNo(b.rec.date) - dayNo(rec.date)));
+  return out.slice(0, 4);
+}
+// The computer's picture of a receipt that is no longer on this phone (if the computer can be reached right now)
+async function computerImage(id) {
+  if (!settings.token || !settings.addr) return null;
+  const ctl = new AbortController(), t = setTimeout(() => ctl.abort(), 4000);
+  try {
+    const r = await fetch(baseURL() + '/api/image?id=' + encodeURIComponent(id), { headers: { Authorization: 'Bearer ' + settings.token }, signal: ctl.signal, cache: 'no-store' });
+    if (!r.ok || !(r.headers.get('Content-Type') || '').startsWith('image/')) return null;
+    return URL.createObjectURL(await r.blob());
+  } catch (e) { return null; } finally { clearTimeout(t); }
+}
+function askRescan(rec, matches) {
+  return new Promise(resolve => {
+    const urls = [];
+    const done = ans => { $('dup').classList.add('hidden'); urls.forEach(u => URL.revokeObjectURL(u)); resolve(ans); };
+    const nu = URL.createObjectURL(rec.image); urls.push(nu);
+    $('dupNewImg').src = nu;
+    $('dupNewInfo').textContent = `${fmtD(rec.date)} · ${fmtMoney(rec.total)}${rec.payee ? ' · ' + rec.payee : ''}`;
+    $('dupText').textContent = matches.length > 1
+      ? `You already have ${matches.length} receipts with the same total and a close date. If this is a rescan of one of them, pick which picture to keep.`
+      : 'You already have a receipt with the same total and a close date. If this is a rescan of it, pick which picture to keep.';
+    const list = $('dupList'); list.innerHTML = '';
+    for (const m of matches) {
+      const r = m.rec, card = document.createElement('div'); card.className = 'dupCard';
+      let pic;
+      if (m.where === 'phone' && r.image) { pic = document.createElement('img'); const u = URL.createObjectURL(r.image); urls.push(u); pic.src = u; pic.alt = 'Earlier scan'; }
+      else {
+        pic = document.createElement('div'); pic.className = 'noimg'; pic.textContent = 'Getting the picture from your computer…';
+        computerImage(r.id).then(u => {
+          if (!u) { pic.textContent = 'Picture is on your computer'; return; }
+          urls.push(u); const img = document.createElement('img'); img.src = u; img.alt = 'Earlier scan'; pic.replaceWith(img);
+        });
+      }
+      const info = document.createElement('div'); info.className = 'grow';
+      const where = m.where === 'computer' ? (r.billed ? 'On your computer, already BILLED (not on this phone any more)' : 'On your computer (not on this phone any more)') : r.synced ? 'On this phone and your computer' : 'Only on this phone (not synced yet)';
+      info.innerHTML = '<b></b><div class="small"></div><div class="small muted"></div><div class="btns"></div>';
+      info.children[0].textContent = 'Earlier scan';
+      info.children[1].textContent = `${fmtD(r.date)} · ${fmtMoney(r.total)}${r.payee ? ' · ' + r.payee : ''}${r.customer ? ' · ' + r.customer : ''}`;
+      info.children[2].textContent = where;
+      const keepNew = document.createElement('button'); keepNew.className = 'primary'; keepNew.textContent = 'Same receipt: keep the NEW scan';
+      const keepOld = document.createElement('button'); keepOld.className = 'secondary'; keepOld.textContent = 'Same receipt: keep this earlier scan';
+      keepNew.onclick = () => done({ action: 'new', match: m });
+      keepOld.onclick = () => done({ action: 'old', match: m });
+      info.children[3].append(keepNew, keepOld);
+      card.append(pic, info); list.append(card);
+    }
+    $('dupNot').onclick = () => done({ action: 'separate' });
+    $('dupBack').onclick = () => done({ action: 'back' });
+    $('dup').classList.remove('hidden');
+  });
+}
+async function useRescan(rec, { action, match }) {
+  const fill = (t, f) => { if (!t[f] && rec[f]) t[f] = rec[f]; };
+  if (action === 'new') {
+    let t;
+    if (match.where === 'phone') {
+      t = await DB.get(match.rec.id);
+      if (!t.synced && !t.imageOnly) {            // not on the computer yet: the whole receipt goes over with the new picture
+        ['payee', 'customer', 'note'].forEach(f => fill(t, f));
+        if (!t.category || t.category === DEFAULT_CATEGORY) t.category = rec.category || t.category;
+        if (!t.memoManual) t.memo = t.payee;
+      } else t.imageOnly = true;                    // already on the computer: only the picture is replaced there
+    } else {
+      const k = match.rec;                          // only on the computer: bring it back to the phone with the new picture
+      t = { id: k.id, created: Date.now(), date: k.date, total: k.total, payee: k.payee || '', memo: k.payee || '', memoManual: false,
+        customer: k.customer || '', category: k.category || '', note: k.note || '', ocrText: '', imageOnly: true };
+    }
+    Object.assign(t, { image: rec.image, thumb: rec.thumb, ocrText: rec.ocrText || t.ocrText || '', updated: Date.now(), synced: false });
+    await DB.put(t);
+  }
+  current = null; dirty = false;
+  show('home'); await renderHome();
+  if (action === 'new') { toast(match.where === 'phone' && !match.rec.synced ? '✓ The new scan replaced the earlier one' : '✓ The new scan will replace the picture on your computer'); sync(false); }
+  else toast('Kept the earlier scan. The new scan was not saved.');
+}
 $('editBack').onclick = () => {
   if (dirty && !confirm(isNew ? 'Throw away this scan?' : 'Leave without saving your changes?')) return;
   current = null; show('home'); renderHome();
@@ -510,8 +607,16 @@ async function sync(manual) {
       lists.pending = { customers: [], categories: [] }; await saveLists();
     }
     for (const r of waiting) {
+      if (r.imageOnly) {                        // a better scan of a receipt the computer already has
+        const fi = new FormData();
+        fi.append('id', r.id); fi.append('image', r.image, r.id + '.jpg');
+        let res = null;
+        try { res = await api('POST', '/api/receipts/image', fi, 60000, { manual }); } catch (e) { if (e.status !== 404) throw e; }
+        if (res && res.ok === true) { delete r.imageOnly; r.synced = true; r.syncedAt = Date.now(); await DB.put(r); sent++; continue; }
+        delete r.imageOnly;                      // computer doesn't have it any more (or is an older version): send the whole receipt
+      }
       const fd = new FormData();
-      const { image, thumb, ...meta } = r;
+      const { image, thumb, imageOnly, ...meta } = r;
       fd.append('meta', JSON.stringify(meta));
       fd.append('image', image, r.id + '.jpg');
       await api('POST', '/api/receipts', fd, 60000, { manual });
@@ -521,6 +626,7 @@ async function sync(manual) {
     lists.customers = sortNames(l.customers || []);
     lists.categories = sortNames(l.categories || []);
     lists.payees = l.payees || [];
+    lists.known = l.known || [];
     lists.company = l.company || '';
     showCompany();
     if (typeof l.useNames === 'boolean') settings.names = l.useNames;
