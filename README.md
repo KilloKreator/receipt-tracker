@@ -21,7 +21,8 @@ computer over your own Wi-Fi. Nothing is stored online.
 
 ```bash
 cd desktop
-GOOS=windows GOARCH=amd64 go build -ldflags "-H windowsgui -s -w" -o KellerKraft-Receipts.exe .
+go run github.com/tc-hib/go-winres@latest make --arch amd64   # icon + version details (winres/)
+GOOS=windows GOARCH=amd64 go build -trimpath -ldflags "-H windowsgui" -o KellerKraft-Receipts.exe .
 ```
 
 Receipt reading uses [Tesseract.js](https://github.com/naptha/tesseract.js) (Apache 2.0),
