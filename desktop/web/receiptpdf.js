@@ -10,7 +10,7 @@ const ReceiptPDF = (() => {
   // PDF text: Latin-1 only, escape \ ( )
   const pdfStr = s => '(' + String(s || '').replace(/[‘’]/g, "'").replace(/[“”]/g, '"').replace(/[–—]/g, '-').replace(/…/g, '...')
     .replace(/[^\x20-\xFF]/g, '?').replace(/\\/g, '\\\\').replace(/\(/g, '\\(').replace(/\)/g, '\\)') + ')';
-  const money = n => (n == null || isNaN(n)) ? '' : '$' + Number(n).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+  const money = n => (n == null || isNaN(n)) ? '' : (n < 0 ? '-$' : '$') + Math.abs(Number(n)).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
   const fmtDate = d => d ? new Date(d + 'T12:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '';
 
   function jpegInfo(b) {               // width, height, colour components

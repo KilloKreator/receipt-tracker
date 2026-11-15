@@ -136,3 +136,8 @@ details.week .item{margin:6px 0}
 .dupCard .btns{display:flex;flex-direction:column;gap:6px;margin-top:8px}
 .dupCard .btns button{padding:10px;font-size:15px}
 .dupNewCard{border:2px solid var(--accent)}
+
+/* return (negative total) */
+.negbtn{flex:none;padding:9px 11px;font-size:15px;font-weight:600;background:var(--accent-soft);color:var(--accent);border-radius:10px}
+.negbtn[aria-pressed="true"]{background:var(--bad-soft);color:var(--bad)}
+input.neg{color:var(--bad)}

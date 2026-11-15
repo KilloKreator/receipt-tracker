@@ -964,9 +964,10 @@ function matchCustomers(){
   const used = new Set(loaded.rows.filter(r=>r.manualC && r.custFrom).map(r=>r.custFrom.id));
   const pairs = [];
   rows.forEach(row=>{
-    if(row.dir!=='out' || !norm(row.vendor)) return;
+    if(!norm(row.vendor)) return;
+    const signed = row.dir==='out' ? row.amount : -row.amount;   // a return receipt (negative total) matches a refund/credit line
     recs.forEach(rc=>{
-      if(Math.abs(Number(rc.total)-row.amount) < 0.005 && lc(rc.payee)===lc(row.vendor)){
+      if(Math.abs(Number(rc.total)-signed) < 0.005 && lc(rc.payee)===lc(row.vendor)){
         const dd = Math.abs((new Date(row.iso+'T12:00') - new Date((rc.date||row.iso)+'T12:00'))/864e5);
         pairs.push({row, rc, dd});          // only total + payee must match; the date just picks the closest
       }

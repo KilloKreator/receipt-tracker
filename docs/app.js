@@ -1,6 +1,6 @@
 /* Time Saver — phone app */
 'use strict';
-const VERSION = '0.2.4';
+const VERSION = '0.2.5';
 const DEFAULT_CATEGORY = 'Uncategorized Expenses';
 const $ = id => document.getElementById(id);
 const norm = s => String(s == null ? '' : s).replace(/\s+/g, ' ').trim();
@@ -247,7 +247,7 @@ async function readReceipt(canvas, rec) {
     if (current !== rec) return;
     const found = [];
     if (got.date && !touched.has('date')) { rec.date = got.date; $('fDate').value = got.date; found.push('date'); }
-    if (got.total != null && !touched.has('total')) { rec.total = got.total; $('fTotal').value = got.total.toFixed(2); found.push('total'); }
+    if (got.total != null && !touched.has('total')) { rec.total = got.total; $('fTotal').value = got.total.toFixed(2); showNeg(); found.push('total'); }
     if (got.payee && !touched.has('payee')) { setPayee(got.payee); found.push('payee'); }
     else if (!got.payee && got.store && !$('fPayee').value) showStoreHint(got.store);
     st.textContent = found.length ? `✓ Read the ${found.join(', ')}. Please check ${found.length > 1 ? 'them' : 'it'}.` : "Couldn't read this receipt clearly. Please fill it in.";
@@ -287,7 +287,7 @@ function openEdit(rec, fresh) {
   $('editImg').src = URL.createObjectURL(rec.image);
   $('ocrStatus').classList.add('hidden'); $('storeHint').classList.add('hidden');
   $('fDate').value = rec.date || '';
-  $('fTotal').value = rec.total != null ? Number(rec.total).toFixed(2) : '';
+  $('fTotal').value = rec.total != null ? Number(rec.total).toFixed(2) : ''; showNeg();
   $('fPayee').value = rec.payee || '';
   $('fCustomer').value = rec.customer || '';
   fillSelect($('fCategory'), lists.categories.concat([DEFAULT_CATEGORY]), rec.category, '— Choose category —', '➕ Add new category…');
@@ -297,6 +297,25 @@ function openEdit(rec, fresh) {
   show('edit');
   $('scr-edit').querySelector('.scroll').scrollTop = 0;
 }
+/* Totals can be negative (returns). The iPhone number pad has no minus key, so there's a "− Return" button. */
+function totalText() {
+  let t = norm($('fTotal').value).replace(/[\u2212\u2013\u2014]/g, '-').replace(/[$,\s]/g, '');
+  const m = t.match(/^\((.*)\)$/); if (m) t = '-' + m[1];          // (12.34) = -12.34
+  if (/^\d.*-$/.test(t)) t = '-' + t.slice(0, -1);                   // 12.34- = -12.34
+  return t.replace(/^--/, '');
+}
+function showNeg() {
+  const neg = totalText().startsWith('-');
+  $('fNeg').setAttribute('aria-pressed', neg ? 'true' : 'false');
+  $('fNeg').textContent = neg ? '✓ Return' : '− Return';
+  $('fTotal').classList.toggle('neg', neg);
+}
+$('fNeg').onclick = () => {
+  const t = totalText();
+  $('fTotal').value = t.startsWith('-') ? t.slice(1) : '-' + t;
+  dirty = true; touched.add('total'); showNeg();
+};
+$('fTotal').addEventListener('input', showNeg);
 ['fDate', 'fTotal', 'fNote'].forEach(id => $(id).addEventListener('input', () => { dirty = true; touched.add(id.slice(1).toLowerCase()); }));
 
 /* Type-and-pick lists under a box (iPhone Safari only shows typed suggestions above the keyboard) */
@@ -390,12 +409,12 @@ function selectAdd(sel, key, label) {
   });
 }
 selectAdd($('fCategory'), 'category', 'category');
-$('editShare').onclick = () => shareImages([Object.assign({}, current, { date: $('fDate').value || current.date, payee: canonPayee($('fPayee').value) || current.payee, customer: norm($('fCustomer').value), total: parseFloat($('fTotal').value) || current.total })], 'Receipt');
+$('editShare').onclick = () => shareImages([Object.assign({}, current, { date: $('fDate').value || current.date, payee: canonPayee($('fPayee').value) || current.payee, customer: norm($('fCustomer').value), total: parseFloat(totalText()) || current.total })], 'Receipt');
 $('editImg').onclick = () => { $('viewerImg').src = $('editImg').src; $('viewer').classList.remove('hidden'); };
 $('viewerClose').onclick = () => $('viewer').classList.add('hidden');
 
 $('editSave').onclick = async () => {
-  const t = norm($('fTotal').value).replace(/[$,\s]/g, '');
+  const t = totalText();
   if (t && isNaN(parseFloat(t))) { alert('The total should be a number, like 17.81'); return; }
   if (!t && !confirm('There is no total. Save anyway?')) return;
   Object.assign(current, {
@@ -422,11 +441,11 @@ $('editSave').onclick = async () => {
 /* ---------- rescans: the same receipt scanned twice ---------- */
 const dayNo = d => d ? Math.round(new Date(d + 'T12:00').getTime() / 864e5) : NaN;
 const fmtD = d => d ? new Date(d + 'T12:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'No date';
-const fmtMoney = n => n == null ? 'no total' : '$' + Number(n).toFixed(2);
+const fmtMoney = n => n == null ? 'no total' : (n < 0 ? '−$' : '$') + Math.abs(Number(n)).toFixed(2);
 // Same date and total, and the same payee when both have one (same rule as the computer)
 const payKey = n => lc(n).replace(/[^a-z0-9]/g, '');
 async function findRescans(rec) {
-  if (rec.total == null || !(rec.total > 0) || !rec.date) return [];
+  if (rec.total == null || !rec.total || !rec.date) return [];
   const same = x => x.total != null && Math.abs(Number(x.total) - rec.total) < 0.005 && x.date === rec.date &&
     (!payKey(x.payee) || !payKey(rec.payee) || payKey(x.payee) === payKey(rec.payee));
   const onPhone = (await DB.all()).filter(r => r.id !== rec.id);

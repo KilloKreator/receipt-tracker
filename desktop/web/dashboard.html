@@ -420,7 +420,7 @@ const payKey = r => lc(r.payee || r.memo || '').replace(/[^a-z0-9]/g, '');
 function findDups() {
   const not = new Set(S.notDup || []), pairs = [], by = new Map();
   for (const r of S.receipts) {
-    if (!r.date || r.total == null || !(r.total > 0)) continue;
+    if (!r.date || r.total == null || !r.total) continue;
     const k = r.date + '|' + Math.round(r.total * 100);
     if (!by.has(k)) by.set(k, []); by.get(k).push(r);
   }
