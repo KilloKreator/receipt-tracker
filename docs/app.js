@@ -1,6 +1,6 @@
 /* KellerKraft Receipts — phone app */
 'use strict';
-const VERSION = '0.1.5';
+const VERSION = '0.1.6';
 const DEFAULT_CATEGORY = 'Uncategorized Expenses';
 const $ = id => document.getElementById(id);
 const norm = s => String(s == null ? '' : s).replace(/\s+/g, ' ').trim();
@@ -422,11 +422,9 @@ $('editDelete').onclick = async () => {
 };
 
 /* ---------- talking to the computer ---------- */
-function baseURL() {
-  let a = norm(settings.addr).replace(/^https?:\/\//, '').replace(/\/.*$/, '');
-  if (!/:\d+$/.test(a)) a += ':8443';
-  return 'https://' + a;
-}
+// Just the computer's address, whatever was typed or pasted ("http://192.168.1.20:8780/setup" -> "192.168.1.20")
+function cleanAddr(a) { return norm(a).replace(/^https?:\/\//i, '').replace(/\/.*$/, '').replace(/:\d+$/, '').trim(); }
+function baseURL() { return 'https://' + cleanAddr(settings.addr) + ':8443'; }
 async function api(method, path, body, timeoutMs = 15000) {
   const ctl = new AbortController(), t = setTimeout(() => ctl.abort(), timeoutMs);
   const headers = {};
@@ -504,19 +502,37 @@ $('setBack').onclick = () => { show('home'); renderHome(); };
 $('sBW').onchange = () => { settings.bw = $('sBW').checked; saveSettings(); };
 $('sNames').onchange = () => { settings.names = $('sNames').checked; saveSettings(); };
 $('btnPair').onclick = async () => {
-  const addr = norm($('sAddr').value), code = norm($('sCode').value);
-  if (!addr || !/^\d{6}$/.test(code)) { $('pairMsg').textContent = 'Type the computer address and the 6-digit code.'; return; }
-  settings.addr = addr; settings.token = '';
+  const addr = cleanAddr($('sAddr').value), code = norm($('sCode').value).replace(/\s/g, '');
+  if (!addr) { $('pairMsg').textContent = 'Type the computer address shown on the computer (☰ → Phone setup).'; return; }
+  const oldAddr = settings.addr, oldTok = settings.token;      // keep the current connection until the new one works
+  $('sAddr').value = addr;
+  settings.addr = addr;
   $('pairMsg').textContent = 'Connecting…';
+  if (!code) {
+    // already connected before: just check the (new) address with the existing key
+    if (!oldTok) { settings.addr = oldAddr; $('pairMsg').textContent = 'Type the 6-digit code shown on the computer.'; return; }
+    try {
+      await api('GET', '/api/lists');
+      await saveSettings();
+      $('pairMsg').textContent = `✓ Connected to ${addr}`; $('connSummary').textContent = `✓ Connected to ${addr}`;
+      sync(true);
+    } catch (e) {
+      settings.addr = oldAddr;
+      $('pairMsg').textContent = e.status === 401 ? 'The computer needs a new code for this phone. Type the 6-digit code shown on the computer (☰ → Phone setup).' : (e.unreachable ? UNREACHABLE : e.message);
+    }
+    return;
+  }
+  if (!/^\d{6}$/.test(code)) { settings.addr = oldAddr; $('pairMsg').textContent = 'The code is 6 digits.'; return; }
   try {
     const r = await api('POST', '/api/pair', { code, device: 'iPhone' });
     settings.token = r.token; await saveSettings();
+    $('sCode').value = '';
     $('pairMsg').textContent = `✓ Connected to ${r.name || 'your computer'}`;
-    $('connSummary').textContent = `✓ Connected to ${settings.addr}`;
+    $('connSummary').textContent = `✓ Connected to ${addr}`;
     sync(true);
   } catch (e) {
-    await saveSettings();
-    $('pairMsg').textContent = e.unreachable ? UNREACHABLE : (e.status === 403 ? 'That code is wrong or expired. Check the code on the computer.' : e.message);
+    settings.addr = oldAddr; settings.token = oldTok;           // a failed try never breaks the old connection
+    $('pairMsg').textContent = e.unreachable ? UNREACHABLE : (e.status === 403 ? 'That code is wrong or was already used. Each code works once. Check the code shown on the computer now (☰ → Phone setup).' : e.message);
   }
 };
 $('btnClean').onclick = async () => {
