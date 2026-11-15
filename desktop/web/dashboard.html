@@ -307,13 +307,7 @@ tr.picked td{background:var(--soft)}
 <!-- settings -->
 <dialog id="dSettings" class="narrow"><div class="dh"><h3>⚙ Settings</h3><button type="button" class="small" data-close>✕</button></div>
   <div class="db">
-    <p><b>Start automatically with Windows</b> <span id="autoState" class="muted"></span><br>
-      <span class="muted">Recommended, so the phone can sync whenever you're home. To set it up:</span></p>
-    <ol class="muted" style="margin-top:0">
-      <li>Click <button type="button" class="small" id="bStartup">📂 Open the Startup folder</button></li>
-      <li>In another window, open the folder that has <b>KellerKraft-Receipts.exe</b> (<button type="button" class="small" id="bExeFolder">📂 Open it</button>).</li>
-      <li>Hold the <kbd>Alt</kbd> key and drag <b>KellerKraft-Receipts.exe</b> into the Startup folder. That makes a shortcut there.</li>
-    </ol>
+    <p><b>Syncing the phone:</b> the phone sends its receipts while this program is open. Open the program, then open KK Receipts on the phone (or tap ⟳ Sync).</p>
     <p><b>Your receipts are saved in:</b><br><span class="muted" id="dirText"></span><br><button type="button" id="bFolder" style="margin-top:6px">📁 Open folder</button></p>
     <p class="muted">To back up, copy that whole folder (for example to a USB stick).</p>
     <p class="muted" id="verText"></p>
@@ -946,11 +940,9 @@ $('bSaveLists').onclick = async () => {
 
 /* settings */
 $('bSettings').onclick = () => {
-  $('autoState').innerHTML = S.autostart ? '<span style="color:var(--good)">✓ set up</span>' : '(not set up yet)';
   $('dirText').textContent = S.dataDir; $('verText').textContent = 'Version ' + S.version; $('dSettings').showModal();
 };
-$('bStartup').onclick = () => post('/local/startupfolder');
-$('bExeFolder').onclick = () => post('/local/exefolder');
+
 $('bFolder').onclick = () => post('/local/openfolder');
 $('bQuit').onclick = async () => {
   if (!confirm('Stop KellerKraft Receipts? The phone cannot sync until you start it again.')) return;

@@ -6,10 +6,7 @@ package main
 // (no PowerShell, no registry tools, no firewall changes).
 
 import (
-	"os"
 	"os/exec"
-	"path/filepath"
-	"strings"
 	"syscall"
 	"unsafe"
 )
@@ -29,23 +26,6 @@ func shellOpen(target string) {
 }
 
 func hideWindow(cmd *exec.Cmd) {}
-
-func startupFolder() string {
-	return filepath.Join(os.Getenv("APPDATA"), "Microsoft", "Windows", "Start Menu", "Programs", "Startup")
-}
-
-// "Start with Windows" = a shortcut to the program in the Startup folder (made by you)
-func autostartEnabled() bool {
-	entries, _ := os.ReadDir(startupFolder())
-	for _, e := range entries {
-		if strings.Contains(strings.ToLower(e.Name()), "kellerkraft") {
-			return true
-		}
-	}
-	return false
-}
-
-func openStartupFolder() { shellOpen(startupFolder()) }
 
 func showError(msg string) {
 	t, _ := syscall.UTF16PtrFromString("KellerKraft Time Saver")

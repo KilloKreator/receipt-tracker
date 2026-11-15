@@ -32,7 +32,7 @@ import (
 )
 
 const (
-	appVersion = "0.3.5"
+	appVersion = "0.3.6"
 	httpPort   = 8780 // dashboard + phone setup page
 	httpsPort  = 8443 // phone sync
 	phoneApp   = "https://killokreator.github.io/receipt-tracker/"
@@ -650,7 +650,7 @@ func localSite() http.Handler {
 			"version": appVersion, "dataDir": dataDir, "ips": ips, "addrs": addrs, "httpPort": httpPort, "httpsPort": httpsPort,
 			"pairCode": code, "pairExpires": exp.UnixMilli(), "phoneApp": phoneApp, "devices": len(store.data.Devices),
 			"receipts": rs, "customers": nz(store.data.Customers), "categories": nz(store.data.Categories),
-			"payees": store.data.Payees, "useNames": store.data.UseNames, "autostart": autostartEnabled(),
+			"payees": store.data.Payees, "useNames": store.data.UseNames,
 			"lastSync": func() int64 {
 				if ls.IsZero() {
 					return 0
@@ -849,16 +849,6 @@ func localSite() http.Handler {
 			jsonErr(w, 500, err.Error())
 			return
 		}
-		writeJSON(w, 200, map[string]bool{"ok": true})
-	}))
-	mux.HandleFunc("/local/exefolder", local(func(w http.ResponseWriter, r *http.Request) {
-		if exe, err := os.Executable(); err == nil {
-			openFolder(filepath.Dir(exe))
-		}
-		writeJSON(w, 200, map[string]bool{"ok": true})
-	}))
-	mux.HandleFunc("/local/startupfolder", local(func(w http.ResponseWriter, r *http.Request) {
-		openStartupFolder()
 		writeJSON(w, 200, map[string]bool{"ok": true})
 	}))
 	mux.HandleFunc("/local/netcheck", local(func(w http.ResponseWriter, r *http.Request) {

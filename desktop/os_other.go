@@ -8,8 +8,6 @@ import (
 )
 
 func hideWindow(cmd *exec.Cmd) {}
-func autostartEnabled() bool   { return false }
-func openStartupFolder()       {}
 func showError(msg string)     {}
 
 func shellOpen(target string) {
