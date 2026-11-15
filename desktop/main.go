@@ -32,7 +32,7 @@ import (
 )
 
 const (
-	appVersion = "0.4.2"
+	appVersion = "0.4.3"
 	httpPort   = 8780 // dashboard + phone setup page
 	httpsPort  = 8443 // phone sync
 	phoneApp   = "https://killokreator.github.io/receipt-tracker/"
@@ -424,10 +424,9 @@ func phoneAPI() http.Handler {
 			if !rec.HasImage {
 				rec.HasImage = old.HasImage
 			}
-			rec.PdfAt, rec.PdfName, rec.BilledAt, rec.DupOf = old.PdfAt, old.PdfName, old.BilledAt, old.DupOf // the phone doesn't know about PDFs or billing
+			rec.PdfAt, rec.PdfName, rec.BilledAt = old.PdfAt, old.PdfName, old.BilledAt // the phone doesn't know about PDFs or billing
 			*old = rec
 		} else {
-			rec.DupOf = store.billedTwin(&rec)
 			store.data.Receipts = append(store.data.Receipts, &rec)
 		}
 		if rec.Customer != "" {
@@ -704,7 +703,6 @@ func localSite() http.Handler {
 			}
 		}
 		store.mu.Lock()
-		rec.DupOf = store.billedTwin(&rec)
 		store.data.Receipts = append(store.data.Receipts, &rec)
 		if rec.Customer != "" {
 			store.data.Customers = cleanList(append(store.data.Customers, rec.Customer))
@@ -767,7 +765,7 @@ func localSite() http.Handler {
 			"pairCode": code, "pairExpires": exp.UnixMilli(), "phoneApp": phoneApp, "devices": len(store.data.Devices),
 			"company":  store.data.Company,
 			"receipts": rs, "customers": nz(store.data.Customers), "categories": nz(store.data.Categories),
-			"payees": store.data.Payees, "useNames": store.data.UseNames,
+			"payees": store.data.Payees, "useNames": store.data.UseNames, "notDup": nz(store.data.NotDup),
 			"lastSync": func() int64 {
 				if ls.IsZero() {
 					return 0
@@ -898,19 +896,24 @@ func localSite() http.Handler {
 		}
 		writeJSON(w, 200, map[string]bool{"ok": true})
 	}))
-	// "Not a duplicate": stop warning about this receipt
-	mux.HandleFunc("/local/dupok", local(func(w http.ResponseWriter, r *http.Request) {
-		var in struct{ ID string }
-		if json.NewDecoder(io.LimitReader(r.Body, 4096)).Decode(&in) != nil || !idRe.MatchString(in.ID) {
+	// "Not the same receipt": stop warning about this pair
+	mux.HandleFunc("/local/notdup", local(func(w http.ResponseWriter, r *http.Request) {
+		var in struct{ IDs []string }
+		if json.NewDecoder(io.LimitReader(r.Body, 4096)).Decode(&in) != nil || len(in.IDs) != 2 || !idRe.MatchString(in.IDs[0]) || !idRe.MatchString(in.IDs[1]) {
 			jsonErr(w, 400, "bad request")
 			return
 		}
+		sort.Strings(in.IDs)
+		key := in.IDs[0] + "|" + in.IDs[1]
 		store.mu.Lock()
 		defer store.mu.Unlock()
-		if x := store.findReceipt(in.ID); x != nil {
-			x.DupOf = ""
-			x.Updated = time.Now().UnixMilli()
+		for _, k := range store.data.NotDup {
+			if k == key {
+				writeJSON(w, 200, map[string]bool{"ok": true})
+				return
+			}
 		}
+		store.data.NotDup = append(store.data.NotDup, key)
 		if err := store.save(); err != nil {
 			jsonErr(w, 500, err.Error())
 			return

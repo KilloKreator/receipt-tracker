@@ -48,7 +48,8 @@ tfoot td{font-weight:700;background:var(--bg)}
 .dupitem{display:flex;gap:14px;align-items:center;flex-wrap:wrap;background:var(--card);border-radius:8px;padding:10px;margin-top:10px}
 .dupitem figure{margin:0;text-align:center;font-size:12px;color:var(--muted)}
 .dupitem figure img{width:90px;height:120px;object-fit:contain;background:#fff;border:1px solid var(--line);border-radius:4px;cursor:zoom-in;display:block}
-.dupitem .txt{flex:1;min-width:260px}
+.dupitem .txt{min-width:200px;max-width:320px}
+.dupside{display:flex;gap:10px;align-items:flex-start;flex:1;min-width:300px}
 .dupitem .acts{display:flex;gap:8px;flex-wrap:wrap}
 .tag.dup{background:var(--warn-soft);color:var(--warn)}
 .btn.danger{background:var(--bad-soft);color:var(--bad);border-color:var(--bad-soft)}
@@ -390,7 +391,7 @@ function el(tag, props, ...kids) {
 
 async function refresh() {
   try { S = await get(); } catch (e) { $('status').textContent = 'Program is not running'; $('status').className = 'pill warn'; return; }
-  const s = JSON.stringify([S.receipts.map(r => r.id + r.updated + r.received), S.customers, S.categories, S.payees, S.ips, S.pairCode]);
+  const s = JSON.stringify([S.receipts.map(r => r.id + r.updated + r.received + r.date + r.total + r.payee), S.notDup, S.customers, S.categories, S.payees, S.ips, S.pairCode]);
   status();
   if (s === sig) return;
   sig = s; render(); convRefresh();
@@ -406,41 +407,65 @@ const selected = new Set();
 function render() {
   const fill = (id, arr) => { const d = $(id); d.innerHTML = ''; arr.forEach(v => d.append(el('option', { value: v }))); };
   fill('payeeList', S.payees.map(p => p.name)); fill('custList', S.customers); fill('catList', S.categories);
+  dupIds = new Set(findDups().flat().map(r => r.id));
   renderFolders();
   if (curCust !== null) renderCustomer();
   $('foot').textContent = `Time Saver ${S.version} · Saved in ${S.dataDir}`;
   renderBrand();
   renderDupWarn();
 }
-/* Receipts that came in looking like one that was already billed */
-let dupSeen = null;
-function renderDupWarn() {
-  const box = $('dupWarn'), byId = new Map(S.receipts.map(r => [r.id, r]));
-  const dups = S.receipts.filter(r => r.dupOf && byId.has(r.dupOf));
-  box.innerHTML = ''; box.classList.toggle('hidden', !dups.length);
-  const rt = document.querySelector('.mtab[data-mtab="receipts"]'); rt.textContent = (dups.length ? '⚠ ' : '') + '🧾 Receipts';
-  document.title = (dups.length ? '⚠ ' : '') + document.title.replace(/^⚠ /, '');
-  if (!dups.length) { dupSeen = new Set(); return; }
-  const fresh = dupSeen && dups.some(r => !dupSeen.has(r.id));
-  dupSeen = new Set(dups.map(r => r.id));
-  box.append(el('h2', { text: `⚠ ${dups.length === 1 ? 'A receipt' : dups.length + ' receipts'} may already be billed` }),
-    el('div', { class: 'muted', text: (dups.length === 1 ? 'This just came in, but it looks like a receipt' : 'These just came in, but they look like receipts') + ' you already billed (same total, date within 2 days). Check that you don\'t bill the same receipt twice.' }));
-  const desc = r => `${fmtDate(r.date) || 'No date'} · ${money(r.total)}${r.payee ? ' · ' + r.payee : ''}`;
-  const pic = (r, label) => el('figure', null, r.hasImage ? el('img', { src: `/img/${r.id}.jpg?v=${r.received}`, alt: label, title: 'Click to see it bigger', onclick: () => window.open(`/img/${r.id}.jpg?v=${r.received}`, '_blank') }) : el('div', { class: 'empty', text: 'No picture' }), label);
-  for (const r of dups) {
-    const o = byId.get(r.dupOf);
-    box.append(el('div', { class: 'dupitem' },
-      pic(r, 'New'), pic(o, 'Already billed'),
-      el('div', { class: 'txt' },
-        el('div', null, el('b', { text: 'New: ' }), desc(r), r.customer ? ` · ${r.customer}` : el('span', { class: 'muted', text: ' · no customer yet' })),
-        el('div', null, el('b', { text: 'Already billed: ' }), desc(o), o.customer ? ` · ${o.customer}` : '', ` · billed ${new Date(o.billedAt).toLocaleDateString()}`),
-        el('div', { class: 'acts', style: 'margin-top:8px' },
-          el('button', { class: 'btn', text: 'Not the same receipt', title: 'Keep it and stop warning', onclick: async () => { await post('/local/dupok', { id: r.id }); toast('OK, kept it.'); refresh(); } }),
-          el('button', { class: 'btn danger', text: 'Same receipt: delete the new one', onclick: async () => {
-            if (!confirm(`Delete the new copy (${desc(r)})? The billed one stays.`)) return;
-            await post('/local/delete', { id: r.id }); toast('Deleted the new copy.'); refresh(); } })))));
+/* Possible duplicates: same date and total, and the same payee (if both have one). Customer and billed don't matter. */
+let dupSeen = null, dupIds = new Set();
+const payKey = r => lc(r.payee || r.memo || '').replace(/[^a-z0-9]/g, '');
+function findDups() {
+  const not = new Set(S.notDup || []), pairs = [], by = new Map();
+  for (const r of S.receipts) {
+    if (!r.date || r.total == null || !(r.total > 0)) continue;
+    const k = r.date + '|' + Math.round(r.total * 100);
+    if (!by.has(k)) by.set(k, []); by.get(k).push(r);
   }
-  if (fresh) { box.scrollIntoView({ behavior: 'smooth', block: 'start' }); toast('⚠ A receipt that may already be billed just came in. See the top of Receipts.'); }
+  for (const g of by.values()) {
+    if (g.length < 2) continue;
+    g.sort((a, b) => (a.received || a.created || 0) - (b.received || b.created || 0));
+    for (let i = 0; i < g.length; i++) for (let j = i + 1; j < g.length; j++) {
+      const a = g[i], b = g[j], pa = payKey(a), pb = payKey(b);
+      if (pa && pb && pa !== pb) continue;                       // different payees: different receipts
+      if (not.has([a.id, b.id].sort().join('|'))) continue;      // you said they're not the same
+      pairs.push([a, b]);
+    }
+  }
+  return pairs;
+}
+function renderDupWarn() {
+  const box = $('dupWarn'), pairs = findDups();
+  dupIds = new Set(pairs.flat().map(r => r.id));
+  box.innerHTML = ''; box.classList.toggle('hidden', !pairs.length);
+  const rt = document.querySelector('.mtab[data-mtab="receipts"]'); rt.textContent = (pairs.length ? '⚠ ' : '') + '🧾 Receipts';
+  document.title = (pairs.length ? '⚠ ' : '') + document.title.replace(/^⚠ /, '');
+  const keyOf = p => p[0].id + '|' + p[1].id;
+  const fresh = dupSeen && pairs.some(p => !dupSeen.has(keyOf(p)));
+  dupSeen = new Set(pairs.map(keyOf));
+  if (!pairs.length) return;
+  box.append(el('h2', { text: `⚠ ${pairs.length === 1 ? 'Possible duplicate receipt' : pairs.length + ' possible duplicate receipts'}` }),
+    el('div', { class: 'muted', text: 'Same date and total' + ' (and the same payee, when both have one). Check they aren\'t the same receipt saved twice, so it isn\'t billed twice.' }));
+  const desc = r => `${fmtDate(r.date)} · ${money(r.total)}${r.payee ? ' · ' + r.payee : ' · no payee'}`;
+  const del = r => async () => {
+    if (!confirm(`Delete this copy?\n\n${desc(r)}${r.customer ? ' · ' + r.customer : ''}${r.billedAt ? '\n\nThis one is marked BILLED.' : ''}`)) return;
+    await post('/local/delete', { id: r.id }); toast('Deleted.'); refresh();
+  };
+  const side = (r, label) => el('div', { class: 'dupside' },
+    el('figure', null, r.hasImage ? el('img', { src: `/img/${r.id}.jpg?v=${r.received}`, alt: label, title: 'Click to see it bigger', onclick: () => window.open(`/img/${r.id}.jpg?v=${r.received}`, '_blank') }) : el('div', { class: 'empty', text: 'No picture' })),
+    el('div', { class: 'txt' },
+      el('b', { text: label }),
+      el('div', { text: desc(r) }),
+      el('div', { class: 'muted', text: (r.customer || 'No customer yet') + (r.billedAt ? ` · BILLED ${new Date(r.billedAt).toLocaleDateString()}` : '') + (r.pdfAt ? ' · in a PDF' : '') }),
+      el('div', { class: 'muted', text: (r.source === 'computer' ? 'Added on this computer ' : 'From the phone ') + (r.received ? new Date(r.received).toLocaleString() : '') }),
+      el('button', { class: 'btn danger', style: 'margin-top:6px', text: 'Delete this one', onclick: del(r) })));
+  for (const [a, b] of pairs) {
+    box.append(el('div', { class: 'dupitem' }, side(a, 'First'), side(b, 'Second'),
+      el('div', { class: 'acts' }, el('button', { class: 'btn', text: 'Not the same receipt: keep both', onclick: async () => { await post('/local/notdup', { ids: [a.id, b.id] }); toast('OK, kept both.'); refresh(); } }))));
+  }
+  if (fresh) { box.scrollIntoView({ behavior: 'smooth', block: 'start' }); toast('⚠ A possible duplicate receipt came in. See the top of Receipts.'); }
 }
 const sumOf = rs => rs.reduce((s, r) => s + (r.total || 0), 0);
 const toBill = rs => rs.filter(r => !r.billedAt);
@@ -536,7 +561,7 @@ function renderCustomer() {
       el('td', { text: fmtDate(r.date), style: 'white-space:nowrap' }),
       el('td', null, r.payee || r.memo || '',
         r.original === 'pdf' ? el('span', { class: 'tag pc', text: 'PDF', title: 'Added on this computer from a PDF' }) : null,
-        r.dupOf ? el('div', null, el('span', { class: 'tag dup', text: '⚠ May already be billed', title: 'Looks like a receipt that was already billed. See the box at the top.' })) : null,
+        dupIds.has(r.id) ? el('div', null, el('span', { class: 'tag dup', text: '⚠ Possible duplicate', title: 'Same date and total as another receipt. See the box at the top of Receipts.' })) : null,
         r.pdfAt ? el('div', null, el('span', { class: 'tag pdf', text: '📄 In PDF ' + new Date(r.pdfAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }), title: `Put in a PDF on ${new Date(r.pdfAt).toLocaleString()}${r.pdfName ? ': ' + r.pdfName : ''}` })) : null),
       curCust === '(all)' ? el('td', null, r.customer || el('span', { class: 'tag none', text: 'No customer' })) : el('td', { text: r.category || '' }),
       el('td', { class: 'muted', text: r.note || '' }), el('td', { class: 'amt', text: money(r.total) }),

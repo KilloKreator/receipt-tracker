@@ -1,6 +1,6 @@
 /* Time Saver — phone app */
 'use strict';
-const VERSION = '0.2.2';
+const VERSION = '0.2.4';
 const DEFAULT_CATEGORY = 'Uncategorized Expenses';
 const $ = id => document.getElementById(id);
 const norm = s => String(s == null ? '' : s).replace(/\s+/g, ' ').trim();
@@ -423,10 +423,12 @@ $('editSave').onclick = async () => {
 const dayNo = d => d ? Math.round(new Date(d + 'T12:00').getTime() / 864e5) : NaN;
 const fmtD = d => d ? new Date(d + 'T12:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'No date';
 const fmtMoney = n => n == null ? 'no total' : '$' + Number(n).toFixed(2);
-// Same total, and dates no more than 2 days apart (in case a date was read wrong)
+// Same date and total, and the same payee when both have one (same rule as the computer)
+const payKey = n => lc(n).replace(/[^a-z0-9]/g, '');
 async function findRescans(rec) {
-  if (rec.total == null || !(rec.total > 0)) return [];
-  const same = x => x.total != null && Math.abs(Number(x.total) - rec.total) < 0.005 && Math.abs(dayNo(x.date) - dayNo(rec.date)) <= 2;
+  if (rec.total == null || !(rec.total > 0) || !rec.date) return [];
+  const same = x => x.total != null && Math.abs(Number(x.total) - rec.total) < 0.005 && x.date === rec.date &&
+    (!payKey(x.payee) || !payKey(rec.payee) || payKey(x.payee) === payKey(rec.payee));
   const onPhone = (await DB.all()).filter(r => r.id !== rec.id);
   const phoneIds = new Set(onPhone.map(r => r.id));
   const out = onPhone.filter(same).map(r => ({ where: 'phone', rec: r }))
@@ -452,8 +454,8 @@ function askRescan(rec, matches) {
     $('dupNewImg').src = nu;
     $('dupNewInfo').textContent = `${fmtD(rec.date)} · ${fmtMoney(rec.total)}${rec.payee ? ' · ' + rec.payee : ''}`;
     $('dupText').textContent = matches.length > 1
-      ? `You already have ${matches.length} receipts with the same total and a close date. If this is a rescan of one of them, pick which picture to keep.`
-      : 'You already have a receipt with the same total and a close date. If this is a rescan of it, pick which picture to keep.';
+      ? `You already have ${matches.length} receipts with the same date and total. If this is a rescan of one of them, pick which picture to keep.`
+      : 'You already have a receipt with the same date and total. If this is a rescan of it, pick which picture to keep.';
     const list = $('dupList'); list.innerHTML = '';
     for (const m of matches) {
       const r = m.rec, card = document.createElement('div'); card.className = 'dupCard';
@@ -523,8 +525,22 @@ $('editDelete').onclick = async () => {
 // Just the computer's address, whatever was typed or pasted ("http://192.168.1.20:8780/setup" -> "192.168.1.20")
 function cleanAddr(a) { return norm(a).replace(/^https?:\/\//i, '').replace(/\/.*$/, '').replace(/:\d+$/, '').trim(); }
 function baseURL() { return 'https://' + cleanAddr(settings.addr) + ':8443'; }
-// opts is no longer used (the automatic search was removed); kept so older calls still work
-async function api(method, path, body, timeoutMs = 15000, opts = {}) { return apiOnce(method, path, body, timeoutMs); }
+async function api(method, path, body, timeoutMs = 15000, opts = {}) {
+  try { return await apiOnce(method, path, body, timeoutMs); }
+  catch (e) {
+    // The computer may have been given a new address by the Wi-Fi router: look for it, then try once more
+    if (!e.unreachable || !settings.token || opts.noSearch) throw e;
+    if (!opts.manual && Date.now() - lastAutoSearch < 10 * 60e3) throw e;   // computer probably just off: don't search every time
+    lastAutoSearch = Date.now();
+    const btn = $('btnSync'), label = btn.textContent; btn.textContent = 'Looking for computer…';
+    let found;
+    try { found = await findComputer(); } finally { btn.textContent = label; }
+    if (!found) throw e;
+    toast('✓ Found your computer at its new address: ' + settings.addr);
+    return await apiOnce(method, path, body, timeoutMs);
+  }
+}
+let lastAutoSearch = 0;
 
 /* Find this computer again after its address changed. Only the same home network is
    searched (same first three numbers, e.g. 192.168.1.___). The computer is recognized by
