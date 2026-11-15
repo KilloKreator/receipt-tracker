@@ -1,6 +1,6 @@
 /* Time Saver — phone app */
 'use strict';
-const VERSION = '0.1.8';
+const VERSION = '0.1.9';
 const DEFAULT_CATEGORY = 'Uncategorized Expenses';
 const $ = id => document.getElementById(id);
 const norm = s => String(s == null ? '' : s).replace(/\s+/g, ' ').trim();
@@ -83,9 +83,8 @@ function folderEl(key, cls, icon, title, rs, onShare) {
   return d;
 }
 async function renderHome() {
-  const everything = await DB.all();
-  const hiddenBilled = everything.filter(r => r.billed).length;
-  allRecs = everything.filter(r => !r.billed).sort((a, b) => (b.date || '').localeCompare(a.date || '') || b.created - a.created);
+  const hiddenBilled = 0;
+  allRecs = (await DB.all()).sort((a, b) => (b.date || '').localeCompare(a.date || '') || b.created - a.created);
   const list = $('list'); list.innerHTML = '';
   $('emptyList').classList.toggle('hidden', allRecs.length > 0 || hiddenBilled > 0);
   const q = lc($('search').value);
@@ -129,7 +128,6 @@ async function renderHome() {
       list.append(md);
     }
   }
-  if (hiddenBilled) { const n = document.createElement('div'); n.className = 'results'; n.textContent = `${hiddenBilled} billed receipt${hiddenBilled === 1 ? '' : 's'} hidden (billed on the computer).`; list.append(n); }
   const waiting = allRecs.filter(r => !r.synced).length;
   const bar = $('syncBar');
   bar.className = 'syncbar';
@@ -470,14 +468,6 @@ async function sync(manual) {
     lists.categories = sortNames(l.categories || []);
     lists.payees = l.payees || [];
     lists.company = l.company || '';
-    // receipts marked Billed on the computer are tagged and hidden on the phone
-    if (Array.isArray(l.billed)) {
-      const billed = new Set(l.billed);
-      for (const r of await DB.all()) {
-        const b = r.synced && billed.has(r.id);
-        if (!!r.billed !== b) { r.billed = b; await DB.put(r); }
-      }
-    }
     showCompany();
     if (typeof l.useNames === 'boolean') settings.names = l.useNames;
     settings.lastListSync = Date.now(); await saveSettings(); await saveLists();
@@ -504,8 +494,7 @@ async function openSettings() {
   try {
     const est = await navigator.storage.estimate();
     const all = await DB.all();
-    const waiting = all.filter(r => !r.synced).length, billedN = all.filter(r => r.billed).length;
-    $('btnCleanBilled').textContent = `Remove billed receipts from this phone${billedN ? ' (' + billedN + ')' : ''}`;
+    const waiting = all.filter(r => !r.synced).length;
     $('storeInfo').textContent = `${all.length} receipts on this phone (about ${Math.round((est.usage || 0) / 1048576)} MB)` + (waiting ? `. ${waiting} not synced yet: they are only on this phone.` : '. All are also on your computer.');
   } catch (e) { $('storeInfo').textContent = ''; }
   $('version').textContent = 'Receipts ' + VERSION;
@@ -549,10 +538,18 @@ $('btnPair').onclick = async () => {
     $('pairMsg').textContent = e.unreachable ? UNREACHABLE : (e.status === 403 ? 'That code is wrong or was already used. Each code works once. Check the code shown on the computer now (☰ → Phone setup).' : e.message);
   }
 };
+// Asks the computer NOW which receipts are billed. If it can't be reached, nothing is removed
+// and nothing is remembered for later: it only happens when this button is tapped again.
 $('btnCleanBilled').onclick = async () => {
-  const billed = (await DB.all()).filter(r => r.billed && r.synced);
-  if (!billed.length) { toast('No billed receipts on this phone. Sync first to see which ones were billed.'); return; }
-  if (!confirm(`Remove ${billed.length} billed receipt${billed.length > 1 ? 's' : ''} from this phone? They stay on your computer.`)) return;
+  if (!settings.token) { toast('Connect to your computer first (Computer connection below).'); return; }
+  const btn = $('btnCleanBilled'); btn.disabled = true; const label = btn.textContent; btn.textContent = 'Asking your computer…';
+  let billedIds;
+  try { billedIds = new Set(((await api('GET', '/api/lists')).billed) || []); }
+  catch (e) { alert("Couldn't reach your computer, so nothing was removed.\n\nTry again when the phone is on home Wi-Fi and the program is open on the computer."); return; }
+  finally { btn.disabled = false; btn.textContent = label; }
+  const billed = (await DB.all()).filter(r => r.synced && billedIds.has(r.id));
+  if (!billed.length) { toast('None of the receipts on this phone are marked billed on the computer.'); return; }
+  if (!confirm(`${billed.length} receipt${billed.length > 1 ? 's on this phone are' : ' on this phone is'} marked billed on the computer. Remove ${billed.length > 1 ? 'them' : 'it'} from this phone?\n\nThey stay on your computer.`)) return;
   for (const r of billed) await DB.del(r.id);
   toast(`Removed ${billed.length} billed receipt${billed.length > 1 ? 's' : ''} from this phone`);
   openSettings();
@@ -575,6 +572,7 @@ function showCompany() { $('coName').textContent = lists.company ? lists.company
     const l = await DB.kvGet('lists'); if (l) lists = Object.assign(lists, l);
     lists.pending = lists.pending || { customers: [], categories: [] };
   } catch (e) { alert('This phone is not letting the app save data. Please open it from the Home Screen icon.'); }
+  try { for (const r of await DB.all()) if (r.billed) { delete r.billed; await DB.put(r); } } catch (e) {}   // earlier version hid billed receipts
   refreshPayeeList();
   showCompany();
   renderHome();
