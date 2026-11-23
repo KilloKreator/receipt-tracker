@@ -1,6 +1,6 @@
 /* Time Saver — phone app */
 'use strict';
-const VERSION = '0.2.5';
+const VERSION = '0.2.6';
 const DEFAULT_CATEGORY = 'Uncategorized Expenses';
 const $ = id => document.getElementById(id);
 const norm = s => String(s == null ? '' : s).replace(/\s+/g, ' ').trim();
@@ -12,6 +12,7 @@ const todayISO = () => { const d = new Date(); return `${d.getFullYear()}-${Stri
 let settings = { bw: true, names: true, addr: '', token: '' };
 let lists = { customers: [], categories: [], payees: [], pending: { customers: [], categories: [] } };
 let current = null;      // receipt being edited
+let custBefore = '';     // its customer when it was opened (to count customer use)
 let isNew = false, dirty = false, touched = new Set();
 let syncing = false;
 
@@ -282,7 +283,7 @@ function showStoreHint(store) {
   h.append(b); h.classList.remove('hidden');
 }
 function openEdit(rec, fresh) {
-  current = rec; isNew = fresh; dirty = fresh; touched = new Set();
+  current = rec; isNew = fresh; dirty = fresh; touched = new Set(); custBefore = lc(rec.customer);
   $('editTitle').textContent = fresh ? 'New receipt' : 'Receipt';
   $('editImg').src = URL.createObjectURL(rec.image);
   $('ocrStatus').classList.add('hidden'); $('storeHint').classList.add('hidden');
@@ -318,13 +319,48 @@ $('fNeg').onclick = () => {
 $('fTotal').addEventListener('input', showNeg);
 ['fDate', 'fTotal', 'fNote'].forEach(id => $(id).addEventListener('input', () => { dirty = true; touched.add(id.slice(1).toLowerCase()); }));
 
+/* Customer picker order: the job you last added a receipt to comes first, then the most used, then A–Z.
+   Kept on this phone: { "mike": { n: 12, last: 1763900000000 } } */
+let custUse = {};
+const saveCustUse = () => DB.kvSet('custUse', custUse).catch(() => {});
+function noteCustomerUse(name) {
+  const k = lc(name); if (!k) return;
+  const u = custUse[k] || (custUse[k] = { n: 0, last: 0 });
+  u.n++; u.last = Date.now(); saveCustUse();
+}
+function custOrder(list) {
+  const use = n => custUse[lc(n)] || { n: 0, last: 0 };
+  let top = null;
+  for (const n of list) if (use(n).last && (!top || use(n).last > use(top).last)) top = n;
+  list.sort((a, b) => (b === top) - (a === top) || use(b).n - use(a).n || use(b).last - use(a).last || a.localeCompare(b, undefined, { sensitivity: 'base' }));
+  return list;
+}
+// First time: count the receipts already on this phone (and recent ones the computer told us about)
+async function seedCustUse() {
+  const saved = await DB.kvGet('custUse').catch(() => null);
+  if (saved && Object.keys(saved).length) { custUse = saved; return; }
+  const onPhone = await DB.all(), ids = new Set();
+  for (const r of onPhone) {
+    ids.add(r.id); const k = lc(r.customer); if (!k) continue;
+    const u = custUse[k] || (custUse[k] = { n: 0, last: 0 }); u.n++; u.last = Math.max(u.last, r.created || 0);
+  }
+  for (const r of lists.known || []) {
+    const k = lc(r.customer); if (!k || ids.has(r.id)) continue;
+    const u = custUse[k] || (custUse[k] = { n: 0, last: 0 }); u.n++;
+    if (!u.last) u.last = 1;            // older than anything added on this phone
+  }
+  saveCustUse();
+}
+
 /* Type-and-pick lists under a box (iPhone Safari only shows typed suggestions above the keyboard) */
-function setupAC(input, ul, getNames, onPick, word, showAllWhenEmpty) {
+function setupAC(input, ul, getNames, onPick, word, showAllWhenEmpty, order) {
   let picking = false, hl = -1;
+  const alpha = list => list.sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
+  const arrange = order || alpha;
   function matches(q) {
     q = lc(q);
     const names = getNames();
-    if (!q) return showAllWhenEmpty ? names.slice().sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' })).slice(0, 60) : [];
+    if (!q) return showAllWhenEmpty ? arrange(names.slice()).slice(0, 60) : [];
     const starts = [], words = [], contains = [];
     for (const n of names) {
       const l = lc(n);
@@ -332,6 +368,7 @@ function setupAC(input, ul, getNames, onPick, word, showAllWhenEmpty) {
       else if (l.split(/[^a-z0-9]+/).some(w => w.startsWith(q))) words.push(n);
       else if (l.includes(q)) contains.push(n);
     }
+    if (order) { order(starts); order(words); order(contains); }
     return starts.concat(words, contains).slice(0, 10);
   }
   function render() {
@@ -390,7 +427,7 @@ function setCustomer(name) {
   if (current) current.customer = v;
   $('fCustomer').value = v;
 }
-const custAC = setupAC($('fCustomer'), $('custSug'), () => lists.customers, n => { dirty = true; setCustomer(n); }, 'customer', true);
+const custAC = setupAC($('fCustomer'), $('custSug'), () => lists.customers, n => { dirty = true; setCustomer(n); }, 'customer', true, custOrder);
 $('fCustomer').addEventListener('input', () => { dirty = true; });
 $('fCustomer').addEventListener('change', () => { if (!custAC.picking()) setCustomer($('fCustomer').value); });
 
@@ -432,6 +469,7 @@ $('editSave').onclick = async () => {
       if (ans.action !== 'separate') { await useRescan(current, ans); return; }
     }
   }
+  if (current.customer && (isNew || lc(current.customer) !== custBefore)) noteCustomerUse(current.customer);
   await DB.put(current);
   current = null; dirty = false;
   show('home'); await renderHome();
@@ -777,6 +815,7 @@ function showCompany() { $('coName').textContent = lists.company ? lists.company
     lists.pending = lists.pending || { customers: [], categories: [] };
   } catch (e) { alert('This phone is not letting the app save data. Please open it from the Home Screen icon.'); }
   try { for (const r of await DB.all()) if (r.billed) { delete r.billed; await DB.put(r); } } catch (e) {}   // earlier version hid billed receipts
+  try { await seedCustUse(); } catch (e) {}
   refreshPayeeList();
   showCompany();
   renderHome();
