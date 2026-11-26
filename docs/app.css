@@ -141,3 +141,5 @@ details.week .item{margin:6px 0}
 .negbtn{flex:none;padding:9px 11px;font-size:15px;font-weight:600;background:var(--accent-soft);color:var(--accent);border-radius:10px}
 .negbtn[aria-pressed="true"]{background:var(--bad-soft);color:var(--bad)}
 input.neg{color:var(--bad)}
+
+.chip.file{background:var(--accent-soft);color:var(--accent)}

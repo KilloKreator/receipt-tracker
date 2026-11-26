@@ -104,6 +104,14 @@
         <button class="secondary wide" id="btnClean">Remove synced receipts from this phone</button>
         <p class="small muted">They stay safe on your computer.</p>
       </div>
+      <div class="card" id="fileCard">
+        <h3>Send to computer without Wi-Fi</h3>
+        <p class="small">If this phone can't connect to the computer, send your receipts as a <b>file</b> instead: email it to yourself, or save it to iCloud Drive or OneDrive. On the computer, click <b>📥 Import from phone</b> (or drag the file onto Time Saver).</p>
+        <button class="primary wide" id="btnSendFile">📤 Send receipts as a file</button>
+        <button class="secondary wide" id="btnLoadLists">📥 Load lists file from computer</button>
+        <input type="file" id="listsFile" accept=".json,application/json" class="hidden">
+        <p class="small muted" id="fileInfo"></p>
+      </div>
       <details class="card conn" id="connCard">
         <summary><span><b>Computer connection</b><br><span class="small muted" id="connSummary"></span></span></summary>
         <p class="small">On the computer: <b>☰ → 📱 Phone setup</b> shows the address and a code. <b>Already connected before and only the address changed?</b> Type the new address, leave the code empty, and tap Connect.</p>

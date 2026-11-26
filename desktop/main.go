@@ -32,7 +32,7 @@ import (
 )
 
 const (
-	appVersion = "0.4.9"
+	appVersion = "0.5.0"
 	httpPort   = 8780 // dashboard + phone setup page
 	httpsPort  = 8443 // phone sync
 	phoneApp   = "https://killokreator.github.io/receipt-tracker/"
@@ -273,32 +273,7 @@ func phoneAPI() http.Handler {
 		writeJSON(w, 200, map[string]string{"token": tok, "name": host})
 	})
 	mux.HandleFunc("/api/lists", authed(func(w http.ResponseWriter, r *http.Request) {
-		store.mu.Lock()
-		d := map[string]any{"customers": nz(store.data.Customers), "categories": nz(store.data.Categories), "payees": store.data.Payees, "useNames": store.data.UseNames,
-			"company": store.data.Company.Name}
-		// receipts marked Billed on the computer, so the phone can hide them
-		billed := []string{}
-		for _, x := range store.data.Receipts {
-			if x.BilledAt != 0 {
-				billed = append(billed, x.ID)
-			}
-		}
-		d["billed"] = billed
-		// recent receipts on the computer, so the phone can spot a rescan of one it no longer has
-		cutoff := time.Now().AddDate(0, 0, -180).Format("2006-01-02")
-		known := []map[string]any{}
-		for _, x := range store.data.Receipts {
-			if x.Total != nil && x.Date >= cutoff {
-				known = append(known, map[string]any{"id": x.ID, "date": x.Date, "total": *x.Total, "payee": x.Payee, "customer": x.Customer,
-					"category": x.Category, "note": x.Note, "hasImage": x.HasImage, "billed": x.BilledAt != 0})
-			}
-		}
-		d["known"] = known
-		if store.data.Payees == nil {
-			d["payees"] = []Payee{}
-		}
-		store.mu.Unlock()
-		writeJSON(w, 200, d)
+		writeJSON(w, 200, phoneLists())
 	}))
 	mux.HandleFunc("/api/lists/add", authed(func(w http.ResponseWriter, r *http.Request) {
 		var req struct{ Customers, Categories []string }
@@ -543,6 +518,7 @@ func localSite() http.Handler {
 		dash(w, r)
 	})
 	mux.HandleFunc("/setup", pageFile("setup.html"))
+	registerPhoneFile(mux)
 	convPage := pageFile("converter.html")
 	mux.HandleFunc("/converter", local(convPage))
 	// IIF converter: its settings + the master lists + receipts (for filling in customers)

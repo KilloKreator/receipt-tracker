@@ -168,6 +168,7 @@ tr.picked td{background:var(--soft)}
           <button role="menuitem" id="bSetup">📱 Phone setup</button>
           <button role="menuitem" id="mLoad">⬆ Load converter settings…</button>
           <button role="menuitem" id="mCompany">🏢 Company setup</button>
+          <button role="menuitem" id="mListsFile" title="For a phone that can't sync over Wi-Fi: send this file to the phone and load it there">📤 Lists file for the phone</button>
           <button role="menuitem" id="mHelp">📘 Converter tutorial</button>
           <button role="menuitem" id="bSettings">⚙ Settings</button>
         </div>
@@ -188,7 +189,9 @@ tr.picked td{background:var(--soft)}
 <section class="card" id="viewFolders">
   <h2>🧾 Receipts <span class="muted">Click a folder to open it.</span>
     <span class="addstack"><button id="bAddTop" title="Add receipt pictures or PDFs from this computer">⬆ Add receipts…</button>
-      <button id="bNewFile" title="Make a customer file: pick a customer or type a new one">📁 Add file…</button></span></h2>
+      <button id="bNewFile" title="Make a customer file: pick a customer or type a new one">📁 Add file…</button>
+      <button id="bPhoneFile" title="Open a receipts file sent from the phone (made with Send receipts as a file). You can also drag it onto this page.">📥 Import from phone…</button></span></h2>
+  <input type="file" id="phoneFileIn" accept=".zip,application/zip" class="hidden">
   <div class="fgrid" id="topGrid"></div>
   <div class="custgroup" id="custGroup">
     <div class="cghead">
@@ -373,7 +376,7 @@ tr.picked td{background:var(--soft)}
   <div class="df"><button type="button" id="addMore">+ Add more files…</button><div class="row"><button type="button" data-close>Cancel</button><button type="button" class="primary" id="addSave">Save receipts</button></div></div>
 </dialog>
 <input type="file" id="addFiles" accept="image/jpeg,image/png,image/webp,image/gif,image/bmp,.pdf,application/pdf" multiple class="hidden">
-<div id="dropHint" class="drophint hidden">Drop receipt pictures or PDFs to add them</div>
+<div id="dropHint" class="drophint hidden">Drop receipt pictures or PDFs to add them, or a receipts file (.zip) from the phone</div>
 <!-- assign customer -->
 <dialog id="dAssign" class="narrow"><div class="dh"><h3>👤 Assign customer</h3><button type="button" class="small" data-close>✕</button></div>
   <div class="db"><p id="assignInfo" class="muted" style="margin-top:0"></p>
@@ -984,6 +987,31 @@ $('addSave').onclick = async () => {
   } catch (e) { alert(`Saved ${n}, then stopped: ${e.message}`); }
   finally { $('addSave').disabled = false; }
 };
+/* ---------- receipts sent from the phone as a file ---------- */
+$('bPhoneFile').onclick = () => { $('phoneFileIn').value = ''; $('phoneFileIn').click(); };
+$('phoneFileIn').onchange = () => { const f = $('phoneFileIn').files[0]; if (f) importPhoneFile(f); };
+async function importPhoneFile(f) {
+  toast('Reading the file from the phone…');
+  const fd = new FormData(); fd.append('file', f);
+  try {
+    const r = await fetch('/local/import', { method: 'POST', headers: { 'X-KK': '1' }, body: fd });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(d.error || ('Error ' + r.status));
+    const parts = [];
+    if (d.added) parts.push(`${plural(d.added, 'new receipt')}`);
+    if (d.updated) parts.push(`${plural(d.updated, 'receipt')} changed on the phone`);
+    if (d.pictures) parts.push(`${plural(d.pictures, 'better scan')}`);
+    sig = ''; await refresh();
+    alert(parts.length ? `✓ Imported from the phone: ${parts.join(', ')}.` + (d.same ? `\n\n${plural(d.same, 'receipt')} in the file ${d.same === 1 ? 'was' : 'were'} already here.` : '') +
+      '\n\nTo let the phone know they arrived (and get your latest customers and payees), send it the lists file: ☰ → 📤 Lists file for the phone.'
+      : `Nothing new: all ${plural(d.same || 0, 'receipt')} in this file ${d.same === 1 ? 'was' : 'were'} already here.`);
+  } catch (e) { alert("Couldn't import the file: " + e.message); }
+}
+$('mListsFile').onclick = () => {
+  closeMenu();
+  const a = el('a', { href: '/local/listsfile' }); document.body.append(a); a.click(); a.remove();
+  setTimeout(() => alert('The lists file is in your Downloads folder.\n\nSend it to the phone the same way the phone sent you its receipts (email it, or put it in iCloud Drive / OneDrive). On the phone: ⚙︎ → Send to computer without Wi-Fi → Load lists file.'), 600);
+};
 // drag & drop files anywhere on the Receipts tab
 let dragDepth = 0;
 const isFileDrag = e => [...(e.dataTransfer?.types || [])].includes('Files');
@@ -993,6 +1021,8 @@ window.addEventListener('dragover', e => { if (isFileDrag(e)) e.preventDefault()
 window.addEventListener('drop', e => {
   if (!isFileDrag(e)) return; e.preventDefault(); dragDepth = 0; $('dropHint').classList.add('hidden');
   if ($('tabReceipts').classList.contains('hidden')) return;
+  const zips = [...e.dataTransfer.files].filter(f => /\.zip$/i.test(f.name));
+  if (zips.length) { (async () => { for (const z of zips) await importPhoneFile(z); })(); return; }
   const fs = [...e.dataTransfer.files].filter(f => /\.(pdf|jpe?g|png|webp|gif|bmp)$/i.test(f.name) || /^image\//.test(f.type));
   if (!fs.length) return;
   if (!$('dAdd').open) { addTarget = curCust && curCust !== '(all)' && curCust !== '(none)' ? curCust : ''; $('addList').innerHTML = ''; $('addTitle').textContent = '⬆ Add receipts' + (addTarget ? ' to ' + addTarget : ''); }

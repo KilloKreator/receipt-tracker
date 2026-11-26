@@ -1,10 +1,11 @@
 /* Time Saver — phone app */
 'use strict';
-const VERSION = '0.2.6';
+const VERSION = '0.2.7';
 const DEFAULT_CATEGORY = 'Uncategorized Expenses';
 const $ = id => document.getElementById(id);
 const norm = s => String(s == null ? '' : s).replace(/\s+/g, ' ').trim();
 const lc = s => norm(s).toLowerCase();
+const plural = (n, w) => `${n} ${w}${n === 1 ? '' : 's'}`;
 const money = n => (n == null || isNaN(n)) ? '—' : n.toLocaleString('en-US', { style: 'currency', currency: 'USD' });
 const uuid = () => (crypto.randomUUID ? crypto.randomUUID() : 'r' + Date.now().toString(36) + Math.random().toString(36).slice(2));
 const todayISO = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
@@ -54,7 +55,7 @@ function itemEl(r) {
   const t1 = document.createElement('div'); t1.className = 't1'; t1.textContent = r.payee || r.memo || '(no payee)';
   const t2 = document.createElement('div'); t2.className = 't2';
   t2.textContent = [dOf(r.date).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }), r.customer || 'No customer'].join(' · ');
-  const chip = document.createElement('span'); chip.className = 'chip ' + (r.synced ? 'ok' : 'wait'); chip.textContent = r.synced ? 'On computer ✓' : 'Waiting to sync';
+  const chip = document.createElement('span'); chip.className = 'chip ' + (r.viaFile ? 'file' : r.synced ? 'ok' : 'wait'); chip.textContent = r.viaFile ? 'Sent as file' : r.synced ? 'On computer ✓' : 'Waiting to sync';
   mid.append(t1, t2, chip);
   const amt = document.createElement('div'); amt.className = 'amt'; amt.textContent = money(r.total);
   it.append(img, mid, amt);
@@ -293,7 +294,7 @@ function openEdit(rec, fresh) {
   $('fCustomer').value = rec.customer || '';
   fillSelect($('fCategory'), lists.categories.concat([DEFAULT_CATEGORY]), rec.category, '— Choose category —', '➕ Add new category…');
   $('fNote').value = rec.note || '';
-  $('editMeta').textContent = fresh ? '' : `Scanned ${new Date(rec.created).toLocaleString()} · ${rec.synced ? 'On your computer ✓' : 'Waiting to sync'}`;
+  $('editMeta').textContent = fresh ? '' : `Scanned ${new Date(rec.created).toLocaleString()} · ${rec.viaFile ? 'Sent as a file (not confirmed by the computer yet)' : rec.synced ? 'On your computer ✓' : 'Waiting to sync'}`;
   $('editDelete').textContent = (!fresh && rec.synced) ? 'Remove from this phone' : 'Delete receipt';
   show('edit');
   $('scr-edit').querySelector('.scroll').scrollTop = 0;
@@ -573,7 +574,8 @@ $('editBack').onclick = () => {
 };
 $('editDelete').onclick = async () => {
   const synced = !isNew && current.synced;
-  if (!confirm(synced ? 'Remove this receipt from the phone? It stays on your computer.' : 'Delete this receipt? This cannot be undone.')) return;
+  if (!confirm(current.viaFile && !isNew ? "This receipt was sent as a file, but the computer hasn't confirmed it got it (load the computer's lists file to confirm). Remove it from this phone anyway?"
+    : synced ? 'Remove this receipt from the phone? It stays on your computer.' : 'Delete this receipt? This cannot be undone.')) return;
   if (!isNew) await DB.del(current.id);
   current = null; show('home'); renderHome();
 };
@@ -673,8 +675,26 @@ async function apiOnce(method, path, body, timeoutMs = 15000) {
     const x = new Error('unreachable'); x.unreachable = true; throw x;
   } finally { clearTimeout(t); }
 }
-const UNREACHABLE = "Can't reach your computer. Check that:\n• this phone is on your home Wi-Fi\n• Time Saver is running on the computer\n• the address is right (if it changed: ⚙︎ → Computer connection → Find my computer)\n• the security certificate is installed and trusted (Phone setup, step 1)";
+const UNREACHABLE = "Can't reach your computer. (You can also send receipts as a file: ⚙︎ → Send to computer without Wi-Fi.)\n\nCheck that:\n• this phone is on your home Wi-Fi\n• Time Saver is running on the computer\n• the address is right (if it changed: ⚙︎ → Computer connection → Find my computer)\n• the security certificate is installed and trusted (Phone setup, step 1)";
 
+// Lists from the computer (over Wi-Fi, or from the lists file). Also confirms receipts that were sent as a file.
+async function applyLists(l) {
+  lists.customers = sortNames(l.customers || []);
+  lists.categories = sortNames(l.categories || []);
+  lists.payees = l.payees || [];
+  lists.known = l.known || [];
+  lists.company = l.company || '';
+  showCompany();
+  if (typeof l.useNames === 'boolean') settings.names = l.useNames;
+  settings.lastListSync = Date.now(); await saveSettings(); await saveLists();
+  refreshPayeeList();
+  let confirmed = 0;
+  if (Array.isArray(l.have)) {
+    const have = new Set(l.have);
+    for (const r of await DB.all()) if (r.viaFile && have.has(r.id)) { delete r.viaFile; r.synced = true; await DB.put(r); confirmed++; }
+  }
+  return confirmed;
+}
 async function sync(manual) {
   if (syncing) return;
   if (!settings.token) { if (manual) { toast('Connect to your computer first.'); openSettings(); } return; }
@@ -704,15 +724,7 @@ async function sync(manual) {
       r.synced = true; r.syncedAt = Date.now(); await DB.put(r); sent++;
     }
     const l = await api('GET', '/api/lists', null, 15000, { manual });
-    lists.customers = sortNames(l.customers || []);
-    lists.categories = sortNames(l.categories || []);
-    lists.payees = l.payees || [];
-    lists.known = l.known || [];
-    lists.company = l.company || '';
-    showCompany();
-    if (typeof l.useNames === 'boolean') settings.names = l.useNames;
-    settings.lastListSync = Date.now(); await saveSettings(); await saveLists();
-    refreshPayeeList();
+    await applyLists(l);
     if (manual || sent) toast(sent ? `✓ Sent ${sent} receipt${sent > 1 ? 's' : ''} to your computer` : '✓ Up to date');
   } catch (e) {
     if (e.status === 401) { settings.token = ''; await saveSettings(); if (manual || sent) alert('This phone needs to be connected to the computer again (Settings).'); }
@@ -740,6 +752,7 @@ async function openSettings() {
     $('storeInfo').textContent = `${all.length} receipts on this phone (about ${Math.round((est.usage || 0) / 1048576)} MB)` + (waiting ? `. ${waiting} not synced yet: they are only on this phone.` : '. All are also on your computer.');
   } catch (e) { $('storeInfo').textContent = ''; }
   $('version').textContent = 'Receipts ' + VERSION;
+  fileInfo();
   show('settings');
 }
 $('btnSettings').onclick = openSettings;
@@ -797,11 +810,94 @@ $('btnCleanBilled').onclick = async () => {
   openSettings();
 };
 $('btnClean').onclick = async () => {
-  const synced = (await DB.all()).filter(r => r.synced);
-  if (!synced.length) { toast('No synced receipts to remove.'); return; }
+  const all = await DB.all(), synced = all.filter(r => r.synced && !r.viaFile), unconf = all.filter(r => r.viaFile).length;
+  if (!synced.length) { toast(unconf ? `${plural(unconf, 'receipt')} sent as a file ${unconf === 1 ? 'is' : 'are'} kept until the computer confirms ${unconf === 1 ? 'it' : 'them'} (load its lists file).` : 'No synced receipts to remove.'); return; }
   if (!confirm(`Remove ${synced.length} synced receipt${synced.length > 1 ? 's' : ''} from this phone? They stay on your computer.`)) return;
   for (const r of synced) await DB.del(r.id);
   openSettings();
+};
+
+/* ---------- send receipts as a file (no Wi-Fi needed) ---------- */
+// A plain .zip (no compression: the pictures are already JPEGs)
+const CRC = (() => { const t = new Uint32Array(256); for (let n = 0; n < 256; n++) { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1; t[n] = c >>> 0; } return t; })();
+function crc32(b) { let c = 0xFFFFFFFF; for (let i = 0; i < b.length; i++) c = CRC[(c ^ b[i]) & 255] ^ (c >>> 8); return (c ^ 0xFFFFFFFF) >>> 0; }
+function makeZip(files) {               // files: [{ name, data: Uint8Array }]
+  const enc = new TextEncoder(), parts = [], central = []; let off = 0;
+  const d = new Date(), dosT = (d.getHours() << 11) | (d.getMinutes() << 5) | (d.getSeconds() >> 1), dosD = ((d.getFullYear() - 1980) << 9) | ((d.getMonth() + 1) << 5) | d.getDate();
+  for (const f of files) {
+    const name = enc.encode(f.name), crc = crc32(f.data), size = f.data.length;
+    const h = new DataView(new ArrayBuffer(30));
+    h.setUint32(0, 0x04034b50, true); h.setUint16(4, 20, true); h.setUint16(6, 0x0800, true); h.setUint16(8, 0, true);
+    h.setUint16(10, dosT, true); h.setUint16(12, dosD, true); h.setUint32(14, crc, true); h.setUint32(18, size, true); h.setUint32(22, size, true);
+    h.setUint16(26, name.length, true); h.setUint16(28, 0, true);
+    parts.push(h, name, f.data);
+    const c = new DataView(new ArrayBuffer(46));
+    c.setUint32(0, 0x02014b50, true); c.setUint16(4, 20, true); c.setUint16(6, 20, true); c.setUint16(8, 0x0800, true); c.setUint16(10, 0, true);
+    c.setUint16(12, dosT, true); c.setUint16(14, dosD, true); c.setUint32(16, crc, true); c.setUint32(20, size, true); c.setUint32(24, size, true);
+    c.setUint16(28, name.length, true); c.setUint32(42, off, true);
+    central.push(c, name);
+    off += 30 + name.length + size;
+  }
+  const cSize = central.reduce((s, p) => s + p.byteLength, 0);
+  const e = new DataView(new ArrayBuffer(22));
+  e.setUint32(0, 0x06054b50, true); e.setUint16(8, files.length, true); e.setUint16(10, files.length, true); e.setUint32(12, cSize, true); e.setUint32(16, off, true);
+  return new Blob([...parts, ...central, e], { type: 'application/zip' });
+}
+async function fileInfo() {
+  const all = await DB.all(), waiting = all.filter(r => !r.synced).length, unconf = all.filter(r => r.viaFile).length;
+  $('fileInfo').textContent = (waiting ? `${plural(waiting, 'receipt')} waiting to go to the computer.` : 'Nothing waiting to go to the computer.') +
+    (unconf ? ` ${plural(unconf, 'receipt')} sent as a file ${unconf === 1 ? 'is' : 'are'} not confirmed yet (load the computer's lists file).` : '') +
+    (settings.listsFileAt ? ` Lists file loaded ${new Date(settings.listsFileAt).toLocaleDateString()}.` : '');
+}
+$('btnSendFile').onclick = async () => {
+  const all = await DB.all();
+  // receipts not on the computer yet, plus ones sent as a file that the computer hasn't confirmed (in case that file got lost)
+  let send = all.filter(r => !r.synced || r.viaFile);
+  if (!send.length) {
+    if (!all.length || !confirm(`All receipts on this phone are already on the computer.\n\nSend all ${plural(all.length, 'receipt')} anyway? (The computer skips ones it already has.)`)) return;
+    send = all;
+  }
+  const btn = $('btnSendFile'), label = btn.textContent; btn.disabled = true; btn.textContent = 'Making the file…';
+  try {
+    const files = [], recs = [];
+    for (const r of send) {
+      const { image, thumb, synced, syncedAt, viaFile, ...meta } = r;
+      recs.push(meta);
+      if (image) files.push({ name: 'images/' + r.id + '.jpg', data: new Uint8Array(await image.arrayBuffer()) });
+    }
+    const json = JSON.stringify({ format: 'timesaver-receipts', version: 1, made: Date.now(), app: VERSION, receipts: recs, pending: lists.pending });
+    files.unshift({ name: 'timesaver-receipts.json', data: new TextEncoder().encode(json) });
+    const stamp = new Date().toISOString().slice(0, 16).replace('T', ' ').replace(':', '');
+    const file = new File([makeZip(files)], `Receipts ${stamp}.zip`, { type: 'application/zip' });
+    const mb = (file.size / 1048576).toFixed(1);
+    let shared = false;
+    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      try { await navigator.share({ files: [file], title: 'Receipts for Time Saver' }); shared = true; }
+      catch (e) { if (e.name === 'AbortError') { toast('Not sent.'); return; } throw e; }
+    } else {
+      const a = document.createElement('a'); a.href = URL.createObjectURL(file); a.download = file.name; document.body.append(a); a.click(); a.remove();
+      shared = confirm(`The file "${file.name}" (${mb} MB) was saved.\n\nDid it save OK?`);
+    }
+    if (!shared) return;
+    const now = Date.now();
+    for (const r of send) { if (!r.synced || r.viaFile) { r.synced = true; r.viaFile = now; delete r.imageOnly; await DB.put(r); } }
+    alert(`✓ ${plural(send.length, 'receipt')} sent as a file (${mb} MB).\n\nOn the computer: click 📥 Import from phone (or drag the file onto Time Saver).\n\nThey stay on this phone, marked "Sent as file", until the computer confirms it got them: on the computer use ☰ → Lists file for the phone, then load it here.`);
+    renderHome(); fileInfo();
+  } catch (e) { alert("Couldn't make the file: " + e.message); }
+  finally { btn.disabled = false; btn.textContent = label; }
+};
+$('btnLoadLists').onclick = () => { $('listsFile').value = ''; $('listsFile').click(); };
+$('listsFile').onchange = async () => {
+  const f = $('listsFile').files[0]; if (!f) return;
+  try {
+    const l = JSON.parse(await f.text());
+    if (l.format !== 'timesaver-lists') throw new Error('This is not a lists file from Time Saver (make it on the computer: ☰ → Lists file for the phone).');
+    const confirmed = await applyLists(l);
+    settings.listsFileAt = Date.now(); await saveSettings();
+    alert(`✓ Loaded the lists from your computer: ${plural((l.customers || []).length, 'customer')}, ${plural((l.payees || []).length, 'payee')}.` +
+      (confirmed ? `\n\nThe computer has ${plural(confirmed, 'receipt')} you sent as a file. ${confirmed === 1 ? 'It is' : 'They are'} now marked On computer ✓.` : ''));
+    renderHome(); fileInfo();
+  } catch (e) { alert("Couldn't load the lists file: " + e.message); }
 };
 
 /* company name (from Company setup on the computer) */
